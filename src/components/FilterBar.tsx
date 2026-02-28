@@ -3,6 +3,8 @@
 import { Filter, List, X } from "lucide-react";
 import type { FilterState } from "@/types/types";
 
+import DownloadWatchlistButton from "./DownloadWatchlistButton";
+
 // ─────────────────────────────────────────────────────────
 // FilterBar — top toolbar with pill-shaped toggle buttons
 //
@@ -14,6 +16,7 @@ interface FilterBarProps {
     filters: FilterState;
     onToggleFilter: (key: keyof FilterState) => void;
     watchlistCount: number;
+    watchlistTitles: string[];
 }
 
 function PillButton({
@@ -50,6 +53,7 @@ export default function FilterBar({
     filters,
     onToggleFilter,
     watchlistCount,
+    watchlistTitles,
 }: FilterBarProps) {
     return (
         <div className="flex flex-wrap items-center gap-2 px-4 py-3"

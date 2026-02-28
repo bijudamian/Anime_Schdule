@@ -18,15 +18,15 @@ interface CalendarHeaderProps {
 
 export default function CalendarHeader({ days }: CalendarHeaderProps) {
     return (
-        <div className="grid grid-cols-7 border-b border-gray-700">
+        <div className="grid grid-cols-1 md:grid-cols-7 border-b border-gray-700">
             {days.map((day) => (
                 <div
                     key={day.dayIndex}
                     className={`
-            flex flex-col items-center justify-center py-3 px-1 text-center transition-colors
+            py-3 px-1 text-center transition-colors
             ${day.isToday
-                            ? "bg-brand-blue text-white"
-                            : "bg-surface text-gray-300"
+                            ? "flex flex-col items-center justify-center bg-brand-blue text-white"
+                            : "hidden md:flex md:flex-col md:items-center md:justify-center bg-surface text-gray-300"
                         }
           `}
                 >

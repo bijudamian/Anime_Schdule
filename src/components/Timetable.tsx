@@ -261,13 +261,17 @@ export default function Timetable() {
                 </div>
             )}
 
-            {/* ── Timetable Grid (7 columns) ── */}
+            {/* ── Timetable Grid (7 columns desktop, 1 column mobile) ── */}
             {!isLoading && !isError && (
-                <div className="grid grid-cols-7 gap-px" style={{ backgroundColor: "#333" }}>
+                <div className="grid grid-cols-1 md:grid-cols-7 gap-px" style={{ backgroundColor: "#333" }}>
                     {weekSchedule.map((day) => (
                         <div
                             key={day.dayIndex}
-                            className="flex flex-col gap-px"
+                            className={
+                                day.isToday
+                                    ? "grid grid-cols-2 sm:grid-cols-3 gap-3 p-3 md:flex md:flex-col md:gap-px md:p-0"
+                                    : "hidden md:flex md:flex-col md:gap-px md:p-0"
+                            }
                             style={{
                                 backgroundColor: day.isToday
                                     ? "rgba(58, 117, 196, 0.08)"
@@ -275,7 +279,7 @@ export default function Timetable() {
                             }}
                         >
                             {day.shows.length === 0 ? (
-                                <div className="flex min-h-[120px] items-center justify-center text-xs text-gray-600">
+                                <div className="col-span-full flex min-h-[120px] items-center justify-center text-xs text-gray-600">
                                     No shows
                                 </div>
                             ) : (

@@ -1,36 +1,65 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# 📅 Anime Tracker & Scheduler
 
-## Getting Started
+A highly-customized, production-ready weekly anime release schedule. This application is a fully functional web app designed to mimic the elegant, dark-themed user interface of AnimeSchedule.net, while adding powerful, personalized features like a local *"Watching"* dashboard and dynamic torrent scraping.
 
-First, run the development server:
+![Anime Tracker Demo](/public/placeholder.png) *(Preview placeholder)*
 
+## 🎯 The Purpose
+
+Keeping up with seasonal anime releases can be a massive headache. Different shows drop on different days, in different timezones, and tracking down the episodes across various groups right after they release is tedious.
+
+This project solves that by giving you a **beautiful, local-timezone-converted weekly grid**. You can quickly filter what you want to see, bookmark the shows you're actively watching, and seamlessly download the latest `.torrent` files straight from Nyaa into a neat `.zip` package with the click of a button.
+
+## ✨ Key Features
+
+- **7-Day Dynamic Timetable:** A responsive, mobile-friendly schedule that snaps to a single-column block on mobile and a robust 7-column grid on desktop.
+- **Local Time Conversion:** UTC air times are instantly converted to the user's localized browser time. 
+- **Advanced Filtering:** Granular pill-filters allow you to sort out the noise. Strip out Chinese Donghua, isolate Web Releases (ONA) vs TV releases, or sort entirely by **SUB** vs **DUB**.
+- **State-Persisted Watchlist:** Bookmark the anime you care about. Zustand saves your preferences into your browser's `localStorage` so they are always there when you return.
+- **Batch Torrent Scraping Engine:** When filtering by your Watchlist, click the `...` on any schedule day to instantly trigger a backend scraper. It searches Nyaa's RSS feeds for the *exact* expected episode, bundles the `.torrent` files into a `.zip`, and serves the final download straight to your desktop.
+
+## 🛠️ The Tech Stack
+
+This project was built to be blazing fast, strictly typed, and incredibly easy to deploy.
+
+- **Framework:** Next.js 14+ (App Router)
+- **Language:** TypeScript exactly configured for frontend and backend API typing
+- **Styling:** Tailwind CSS (Vanilla utilities + Glassmorphism / Dark Theme design system)
+- **State Management:** Zustand (with `persist` middleware)
+- **Data Fetching & Caching:** TanStack React Query v5
+- **Icons:** `lucide-react`
+- **Utility Libraries:** `jszip` (for on-the-fly archive generation)
+
+## 🚀 Getting Started
+
+To run this application locally, you will need a valid AnimeSchedule v3 API Token.
+
+**1. Clone the repository:**
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+git clone https://github.com/bijudamian/Anime_Schdule.git
+cd Anime_Schdule
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+**2. Install dependencies:**
+```bash
+npm install
+```
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+**3. Configure Environment Variables:**
+Create a `.env.local` file in the root directory and add your API credentials:
+```env
+ANIMESCHEDULE_API_BASE=https://animeschedule.net/api/v3
+ANIMESCHEDULE_CLIENT_ID=your_client_id_here
+ANIMESCHEDULE_TOKEN=your_token_here
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+**4. Start the development server:**
+```bash
+npm run dev
+```
 
-## Learn More
+Open [http://localhost:3000](http://localhost:3000) with your browser to see the result. All API requests are securely proxied through the Next.js backend (`/api/schedule`) so your credentials are never exposed to the client.
 
-To learn more about Next.js, take a look at the following resources:
+## 🛡️ License
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+This project is intended for educational purposes and personal use.

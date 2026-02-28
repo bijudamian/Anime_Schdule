@@ -2,8 +2,6 @@
 
 A highly-customized, production-ready weekly anime release schedule. This application is a fully functional web app designed to mimic the elegant, dark-themed user interface of AnimeSchedule.net, while adding powerful, personalized features like a local *"Watching"* dashboard and dynamic torrent scraping.
 
-![Anime Tracker Demo](/public/placeholder.png) *(Preview placeholder)*
-
 ## 🎯 The Purpose
 
 Keeping up with seasonal anime releases can be a massive headache. Different shows drop on different days, in different timezones, and tracking down the episodes across various groups right after they release is tedious.

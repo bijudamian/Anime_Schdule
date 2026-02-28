@@ -78,8 +78,8 @@ export async function POST(req: Request) {
             return NextResponse.json({ error: "No torrents found." }, { status: 404 });
         }
 
-        // Generate the ZIP as a Node Buffer or Uint8Array
-        const zipFile = await zip.generateAsync({ type: "uint8array" });
+        // Generate the ZIP as an ArrayBuffer, natively compatible with Response body
+        const zipFile = await zip.generateAsync({ type: "arraybuffer" });
 
         return new Response(zipFile, {
             status: 200,

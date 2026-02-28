@@ -97,6 +97,8 @@ function normalizeShow(show: TimetableShow): AnimeCardData {
     return {
         id: show.route,
         title,
+        romaji: show.romaji,
+        english: show.english,
         episodeNumber: show.episodeNumber,
         imageUrl: show.imageVersionRoute || "",
         airTime: show.episodeDate,

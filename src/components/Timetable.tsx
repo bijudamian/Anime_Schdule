@@ -97,6 +97,8 @@ function normalizeShow(show: TimetableShow): AnimeCardData {
     return {
         id: show.route,
         title,
+        romaji: show.romaji,
+        english: show.english,
         episodeNumber: show.episodeNumber,
         imageUrl: show.imageVersionRoute || "",
         airTime: show.episodeDate,
@@ -183,6 +185,25 @@ export default function Timetable() {
         });
     };
 
+    // Calculate titles for items in the user's watchlist
+    const watchlistTitles = useMemo(() => {
+        if (!data) return [];
+        const set = new Set<string>();
+        data.forEach((show) => {
+            if (watchlist.includes(show.route)) {
+                const title = show.english || show.title || show.romaji;
+                if (title) set.add(title);
+            }
+        });
+        return Array.from(set);
+    }, [data, watchlist]);
+
+    // Used for torrent uniqueness calculations
+    const allRomajiTitles = useMemo(() => {
+        if (!data) return [];
+        return data.map((s) => s.romaji || s.title || "").filter(Boolean);
+    }, [data]);
+
     // Normalize, filter, and group shows
     const weekSchedule = useMemo(() => {
         if (!data) return buildWeekSchedule([]);
@@ -227,6 +248,7 @@ export default function Timetable() {
                 filters={filters}
                 onToggleFilter={toggleFilter}
                 watchlistCount={watchlist.length}
+                watchlistTitles={watchlistTitles}
             />
 
             {/* ── Timezone Note ── */}
@@ -237,7 +259,7 @@ export default function Timetable() {
             </div>
 
             {/* ── Calendar Header ── */}
-            <CalendarHeader days={weekSchedule} />
+            <CalendarHeader days={weekSchedule} watchlist={watchlist} allRomajiTitles={allRomajiTitles} />
 
             {/* ── Loading State ── */}
             {isLoading && (

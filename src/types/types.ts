@@ -48,6 +48,8 @@ export interface TimetableShow {
 export interface AnimeCardData {
     id: string;
     title: string;
+    romaji: string | null;
+    english: string | null;
     episodeNumber: number | null;
     imageUrl: string;
     airTime: string; // ISO datetime string

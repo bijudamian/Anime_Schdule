@@ -1,7 +1,7 @@
 "use client";
 
 import { useQuery } from "@tanstack/react-query";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { Loader2, AlertTriangle } from "lucide-react";
 
 import CalendarHeader from "./CalendarHeader";
@@ -52,8 +52,7 @@ function getLocalDayIndex(isoString: string): number {
 }
 
 /** Get the Monday of the current week in local time */
-function getWeekMonday(): Date {
-    const now = new Date();
+function getWeekMonday(now: Date = new Date()): Date {
     const dayIndex = now.getDay(); // 0=Sun
     const diff = dayIndex === 0 ? -6 : 1 - dayIndex;
     const monday = new Date(now);
@@ -114,11 +113,10 @@ function normalizeShow(show: TimetableShow): AnimeCardData {
 }
 
 /** Build the 7-day schedule structure */
-function buildWeekSchedule(shows: AnimeCardData[]): DaySchedule[] {
-    const monday = getWeekMonday();
-    const today = new Date();
+function buildWeekSchedule(shows: AnimeCardData[], now: Date = new Date()): DaySchedule[] {
+    const monday = getWeekMonday(now);
     const todayIndex =
-        today.getDay() === 0 ? 6 : today.getDay() - 1;
+        now.getDay() === 0 ? 6 : now.getDay() - 1;
 
     return DAY_NAMES.map((name, idx) => {
         const dayDate = new Date(monday);
@@ -155,6 +153,15 @@ async function fetchSchedule(): Promise<TimetableShow[]> {
 
 export default function Timetable() {
     const { watchlist } = useWatchlistStore();
+
+    // Use state to force the client date to hydrate perfectly and roll over at midnight
+    const [currentTime, setCurrentTime] = useState<Date | null>(null);
+
+    useEffect(() => {
+        setCurrentTime(new Date());
+        const interval = setInterval(() => setCurrentTime(new Date()), 60 * 60 * 1000); // 1hr checks
+        return () => clearInterval(interval);
+    }, []);
 
     const [filters, setFilters] = useState<FilterState>({
         showWatchlistOnly: false,
@@ -206,7 +213,9 @@ export default function Timetable() {
 
     // Normalize, filter, and group shows
     const weekSchedule = useMemo(() => {
-        if (!data) return buildWeekSchedule([]);
+        const now = currentTime || new Date();
+
+        if (!data) return buildWeekSchedule([], now);
 
         let normalized = data.map(normalizeShow);
 
@@ -238,8 +247,8 @@ export default function Timetable() {
             );
         }
 
-        return buildWeekSchedule(normalized);
-    }, [data, filters, watchlist]);
+        return buildWeekSchedule(normalized, now);
+    }, [data, filters, watchlist, currentTime]);
 
     return (
         <div className="min-h-screen" style={{ backgroundColor: "#2b2b2b" }}>

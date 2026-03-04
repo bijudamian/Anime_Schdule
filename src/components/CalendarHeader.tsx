@@ -27,7 +27,7 @@ export default function CalendarHeader({ days, watchlist, allRomajiTitles }: Cal
                     key={day.dayIndex}
                     className={`
             relative py-3 px-1 text-center transition-colors
-            ${day.isToday
+            ${day.isSelected
                             ? "flex flex-col items-center justify-center bg-brand-blue text-white"
                             : "hidden md:flex md:flex-col md:items-center md:justify-center bg-surface text-gray-300"
                         }
@@ -36,7 +36,7 @@ export default function CalendarHeader({ days, watchlist, allRomajiTitles }: Cal
                     <span className="text-[11px] font-medium opacity-80">
                         {day.dateLabel}
                     </span>
-                    <span className={`text-sm font-bold ${day.isToday ? "text-white" : "text-gray-100"}`}>
+                    <span className={`text-sm font-bold ${day.isSelected || day.isToday ? "text-white" : "text-gray-100"}`}>
                         {day.dayName}
                     </span>
                     <DayDropdown shows={day.shows} watchlist={watchlist} allRomajiTitles={allRomajiTitles} />

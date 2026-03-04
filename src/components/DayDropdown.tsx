@@ -16,9 +16,10 @@ export default function DayDropdown({ shows, watchlist, allRomajiTitles }: Props
     const [isOpen, setIsOpen] = useState(false);
     const menuRef = useRef<HTMLDivElement>(null);
 
-    // Compute the precise torrent queries for shows in the user's watchlist for this day
+    const now = new Date().getTime();
     const downloadItems = shows
         .filter((show) => watchlist.includes(show.id))
+        .filter((show) => new Date(show.airTime).getTime() <= now)
         .map((show) => {
             const romaji = show.romaji || show.title;
             return {

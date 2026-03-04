@@ -1,12 +1,12 @@
 # 📅 Anime Tracker & Scheduler
 
-A highly-customized, production-ready weekly anime release schedule. This application is a fully functional web app designed to mimic the elegant, dark-themed user interface of AnimeSchedule.net, while adding powerful, personalized features like a local *"Watching"* dashboard and dynamic torrent scraping.
+A highly-customized, production-ready weekly anime release schedule. This application is a fully functional web app designed to mimic the elegant, dark-themed user interface of AnimeSchedule.net, while adding powerful, personalized features like a local *"Watching"* dashboard and dynamic RSS scraping.
+
 
 ## 🎯 The Purpose
-
 Keeping up with seasonal anime releases can be a massive headache. Different shows drop on different days, in different timezones, and tracking down the episodes across various groups right after they release is tedious.
 
-This project solves that by giving you a **beautiful, local-timezone-converted weekly grid**. You can quickly filter what you want to see, bookmark the shows you're actively watching, and seamlessly download the latest `.torrent` files straight from Nyaa into a neat `.zip` package with the click of a button.
+This project solves that by giving you a **beautiful, local-timezone-converted weekly grid**. You can quickly filter what you want to see, bookmark the shows you're actively watching, and seamlessly download the latest release links straight from RSS feeds into a neat `.zip` package with the click of a button.
 
 ## ✨ Key Features
 
@@ -14,7 +14,7 @@ This project solves that by giving you a **beautiful, local-timezone-converted w
 - **Local Time Conversion:** UTC air times are instantly converted to the user's localized browser time. 
 - **Advanced Filtering:** Granular pill-filters allow you to sort out the noise. Strip out Chinese Donghua, isolate Web Releases (ONA) vs TV releases, or sort entirely by **SUB** vs **DUB**.
 - **State-Persisted Watchlist:** Bookmark the anime you care about. Zustand saves your preferences into your browser's `localStorage` so they are always there when you return.
-- **Batch Torrent Scraping Engine:** When filtering by your Watchlist, click the `...` on any schedule day to instantly trigger a backend scraper. It searches Nyaa's RSS feeds for the *exact* expected episode, bundles the `.torrent` files into a `.zip`, and serves the final download straight to your desktop.
+- **Batch RSS Scraping Engine:** When filtering by your Watchlist, click the `...` on any schedule day to instantly trigger a backend scraper. It searches relevant RSS feeds for the *exact* expected episode, bundles the release files into a `.zip`, and serves the final download straight to your desktop.
 
 ## 🛠️ The Tech Stack
 

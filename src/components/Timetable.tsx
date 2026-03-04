@@ -113,8 +113,11 @@ function normalizeShow(show: TimetableShow): AnimeCardData {
 }
 
 /** Build the 7-day schedule structure */
-function buildWeekSchedule(shows: AnimeCardData[], now: Date = new Date()): DaySchedule[] {
-    const monday = getWeekMonday(now);
+function buildWeekSchedule(shows: AnimeCardData[], now: Date = new Date(), weekOffset: number = 0, selectedDayIndex: number = -1): DaySchedule[] {
+    const targetDate = new Date(now);
+    targetDate.setDate(targetDate.getDate() + weekOffset * 7);
+    const monday = getWeekMonday(targetDate);
+
     const todayIndex =
         now.getDay() === 0 ? 6 : now.getDay() - 1;
 
@@ -134,15 +137,39 @@ function buildWeekSchedule(shows: AnimeCardData[], now: Date = new Date()): DayS
             dayIndex: idx,
             dayName: name,
             dateLabel: formatDateLabel(dayDate),
-            isToday: idx === todayIndex,
+            isToday: weekOffset === 0 && idx === todayIndex,
+            isSelected: idx === selectedDayIndex,
             shows: dayShows,
         };
     });
 }
 
+/** Calculate ISO Year and Week for a given date */
+function getISOWeekInfo(date: Date) {
+    const target = new Date(date.valueOf());
+    const dayNr = (target.getDay() + 6) % 7;
+    target.setDate(target.getDate() - dayNr + 3);
+    const firstThursday = target.valueOf();
+    target.setMonth(0, 1);
+    if (target.getDay() !== 4) {
+        target.setMonth(0, 1 + ((4 - target.getDay()) + 7) % 7);
+    }
+    return {
+        year: target.getFullYear(),
+        week: 1 + Math.ceil((firstThursday - target.valueOf()) / 604800000)
+    };
+}
+
 /** Fetch schedule from our secure API proxy */
-async function fetchSchedule(): Promise<TimetableShow[]> {
-    const res = await fetch("/api/schedule");
+async function fetchSchedule(weekOffset: number): Promise<TimetableShow[]> {
+    let url = "/api/schedule";
+    if (weekOffset !== 0) {
+        const targetDate = new Date();
+        targetDate.setDate(targetDate.getDate() + weekOffset * 7);
+        const { year, week } = getISOWeekInfo(targetDate);
+        url += `?year=${year}&week=${week}`;
+    }
+    const res = await fetch(url);
     if (!res.ok) {
         throw new Error(`API error: ${res.status}`);
     }
@@ -172,9 +199,17 @@ export default function Timetable() {
         dubOnly: false,
     });
 
-    const { data, isLoading, isError, error } = useQuery<TimetableShow[]>({
-        queryKey: ["timetable"],
-        queryFn: fetchSchedule,
+    const [dayOffset, setDayOffset] = useState(0);
+
+    const now = currentTime || new Date();
+    const todayIndex = now.getDay() === 0 ? 6 : now.getDay() - 1;
+    const absoluteDayIndex = todayIndex + dayOffset;
+    const weekOffset = Math.floor(absoluteDayIndex / 7);
+    const selectedDayIndex = ((absoluteDayIndex % 7) + 7) % 7;
+
+    const { data, isLoading, isError, error, isFetching } = useQuery<TimetableShow[]>({
+        queryKey: ["timetable", weekOffset],
+        queryFn: () => fetchSchedule(weekOffset),
         staleTime: 5 * 60 * 1000,
         retry: 2,
     });
@@ -247,8 +282,8 @@ export default function Timetable() {
             );
         }
 
-        return buildWeekSchedule(normalized, now);
-    }, [data, filters, watchlist, currentTime]);
+        return buildWeekSchedule(normalized, now, weekOffset, selectedDayIndex);
+    }, [data, filters, watchlist, currentTime, weekOffset, selectedDayIndex]);
 
     return (
         <div className="min-h-screen" style={{ backgroundColor: "#2b2b2b" }}>
@@ -258,11 +293,73 @@ export default function Timetable() {
                 onToggleFilter={toggleFilter}
                 watchlistCount={watchlist.length}
                 watchlistTitles={watchlistTitles}
+                rightContent={
+                    <div className="hidden sm:flex items-center gap-3">
+                        <button
+                            onClick={() => setDayOffset(prev => prev - 7)}
+                            className="text-[11px] font-semibold px-2 py-1.5 rounded bg-brand-blue/20 text-brand-blue hover:bg-brand-blue/30 transition-colors"
+                        >
+                            &larr; Prev Week
+                        </button>
+                        <span className="text-sm font-semibold text-gray-200 min-w-[100px] text-center">
+                            {weekOffset === 0 ? "Current Week" : weekOffset < 0 ? `${Math.abs(weekOffset)} Week${weekOffset === -1 ? '' : 's'} Ago` : `${weekOffset} Week${weekOffset === 1 ? '' : 's'} Ahead`}
+                        </span>
+                        <button
+                            onClick={() => setDayOffset(prev => prev + 7)}
+                            className="text-[11px] font-semibold px-2 py-1.5 rounded bg-brand-blue/20 text-brand-blue hover:bg-brand-blue/30 transition-colors"
+                        >
+                            Next Week &rarr;
+                        </button>
+                        {dayOffset !== 0 && (
+                            <button
+                                onClick={() => setDayOffset(0)}
+                                className="text-[11px] text-gray-400 hover:text-white transition-colors underline ml-1"
+                            >
+                                Reset
+                            </button>
+                        )}
+                    </div>
+                }
             />
 
-            {/* ── Timezone Note ── */}
-            <div className="flex justify-end px-4 py-1">
-                <span className="text-[10px] italic text-gray-400">
+            {/* ── Timezone Note & Mobile Day Navigation ── */}
+            <div className="flex flex-col sm:flex-row sm:justify-end px-4 py-1.5 gap-2" style={{ backgroundColor: "#2b2b2b" }}>
+                {/* Desktop Timezone Note */}
+                <span className="text-[10px] italic text-gray-400 hidden sm:block">
+                    *All times in your timezone
+                </span>
+
+                {/* Mobile Day Navigation (visible only on small screens) */}
+                <div className="flex sm:hidden items-center justify-between w-full pt-1 pb-1">
+                    <button
+                        onClick={() => setDayOffset(prev => prev - 1)}
+                        className="text-xs font-semibold px-3 py-2 rounded bg-brand-blue/20 text-brand-blue hover:bg-brand-blue/30 transition-colors"
+                    >
+                        &larr; Prev Day
+                    </button>
+                    <div className="flex flex-col items-center">
+                        <span className="text-sm font-bold text-gray-200">
+                            {dayOffset === 0 ? "Today" : DAY_NAMES[selectedDayIndex]}
+                        </span>
+                        {dayOffset !== 0 && (
+                            <button
+                                onClick={() => setDayOffset(0)}
+                                className="text-[10px] text-gray-400 hover:text-white underline mt-0.5"
+                            >
+                                Reset
+                            </button>
+                        )}
+                    </div>
+                    <button
+                        onClick={() => setDayOffset(prev => prev + 1)}
+                        className="text-xs font-semibold px-3 py-2 rounded bg-brand-blue/20 text-brand-blue hover:bg-brand-blue/30 transition-colors"
+                    >
+                        Next Day &rarr;
+                    </button>
+                </div>
+
+                {/* Mobile Timezone Note */}
+                <span className="text-[10px] italic text-gray-400 self-end sm:hidden">
                     *All times in your timezone
                 </span>
             </div>
@@ -275,6 +372,14 @@ export default function Timetable() {
                 <div className="flex flex-col items-center justify-center py-32 text-gray-400">
                     <Loader2 className="h-10 w-10 animate-spin text-brand-blue" />
                     <p className="mt-4 text-sm">Loading anime schedule…</p>
+                </div>
+            )}
+
+            {/* ── Loading Overlay (when fetching new week) ── */}
+            {!isLoading && isFetching && (
+                <div className="fixed top-20 right-4 z-50 rounded bg-brand-blue/90 px-3 py-1.5 text-xs font-semibold text-white shadow-lg flex items-center gap-2">
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                    Fetching schedule...
                 </div>
             )}
 
@@ -299,12 +404,12 @@ export default function Timetable() {
                         <div
                             key={day.dayIndex}
                             className={
-                                day.isToday
+                                day.isSelected
                                     ? "grid grid-cols-2 sm:grid-cols-3 gap-3 p-3 md:flex md:flex-col md:gap-px md:p-0"
                                     : "hidden md:flex md:flex-col md:gap-px md:p-0"
                             }
                             style={{
-                                backgroundColor: day.isToday
+                                backgroundColor: day.isSelected
                                     ? "rgba(58, 117, 196, 0.08)"
                                     : "#2b2b2b",
                             }}

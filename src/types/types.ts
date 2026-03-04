@@ -69,6 +69,7 @@ export interface DaySchedule {
     dayName: string;
     dateLabel: string; // e.g. "23 Feb"
     isToday: boolean;
+    isSelected: boolean;
     shows: AnimeCardData[];
 }
 

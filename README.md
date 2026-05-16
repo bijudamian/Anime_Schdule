@@ -54,7 +54,7 @@ graph TB
         AS["AnimeSchedule API v3"]
         MDB["MongoDB Atlas"]
         CK["Clerk Auth"]
-        NY["Nyaa.si RSS"]
+        NY["Torrent Provider"]
     end
 
     UI <--> ZS
@@ -67,7 +67,7 @@ graph TB
     API_S -->|GET /timetable| AS
     API_U <-->|read/write| MDB
     API_D -->|search| AS
-    API_D -->|RSS scrape| NY
+    API_D -->|Search| NY
     CK -->|JWT validation| MW
 
     style Client fill:#1a1a2e,color:#ededed,stroke:#3A75C4
@@ -120,7 +120,7 @@ flowchart TD
     D --> E["Fetch episode detail<br/>→ get latest aired ep#"]
     E --> F{"ep# > latest aired?"}
     F -->|Yes| G["⚠️ Skip: not yet aired"]
-    F -->|No| H["Search Nyaa RSS"]
+    F -->|No| H["Search Torrent Provider"]
 
     H --> I["Pass 1: First word<br/>of romaji title"]
     I --> J{"Fuzzy matches found?"}
@@ -190,7 +190,7 @@ stateDiagram-v2
 | **Auth** | Clerk (`@clerk/nextjs`) | OAuth / email auth, session management, middleware protection |
 | **Database** | MongoDB Atlas (via `mongodb` driver) | Cloud-persisted user preferences |
 | **Icons** | Lucide React | Consistent, tree-shakeable SVG icon set |
-| **Torrent Parsing** | Custom XML/RSS parser | Lightweight Nyaa.si RSS feed parsing without heavy dependencies |
+| **Torrent Parsing** | Custom XML parser | Lightweight XML parsing without heavy dependencies |
 | **ZIP Generation** | JSZip | Client-downloadable torrent bundles |
 
 ---
@@ -254,17 +254,15 @@ The merged result is pushed to **both** the Zustand store and the database, ensu
 - `isSavingRef` acts as a mutex to prevent overlapping PUT requests.
 - Zustand's `subscribe()` provides a framework-agnostic way to watch for changes without coupling to React's render cycle.
 
----
-
 ### 2. Smart Torrent Resolver (Watchlist Download API)
 
-**Problem**: Given an anime title like *"The Apothecary Diaries"*, find the correct `.torrent` file on Nyaa.si for a specific episode — despite inconsistent naming conventions across release groups.
+**Problem**: Given an anime title like *"The Apothecary Diaries"*, find the correct `.torrent` file for a specific episode — despite inconsistent naming conventions across release groups.
 
 **Solution**: A **3-pass fuzzy matching pipeline**:
 
 | Pass | Search Query | Rationale |
 |:-----|:-------------|:----------|
-| **1** | First word of romaji title (e.g., `"Kusuriya"`) | Nyaa indexes romaji titles; a single keyword minimizes noise |
+| **1** | First word of romaji title (e.g., `"Kusuriya"`) | Search indexes often use romaji titles; a single keyword minimizes noise |
 | **2** | Full romaji title | Fallback if Pass 1 is too ambiguous |
 | **3** | First word of canonical (English) title | Catches shows indexed under English names |
 

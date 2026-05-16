@@ -12,130 +12,6 @@
 A **dark-themed, responsive** weekly anime timetable that pulls live airing data from the [AnimeSchedule.net](https://animeschedule.net) API, renders it in a 7-column calendar grid, and lets users build a personal watchlist with cloud sync — all powered by **Next.js App Router**, **Clerk Auth**, and **MongoDB Atlas**.
 
 ---
-
-## Table of Contents
-
-- [Architecture Overview](#architecture-overview)
-- [Data Flow Diagrams](#data-flow-diagrams)
-- [Tech Stack](#tech-stack)
-- [Project Structure](#project-structure)
-- [Key Features & Creative Solutions](#key-features--creative-solutions)
-  - [1. Bidirectional Sync Engine](#1-bidirectional-sync-engine-syncprovidertsx)
-  - [3. Timezone-Aware Calendar Rendering](#3-timezone-aware-calendar-rendering)
-  - [4. Filter Persistence System](#4-filter-persistence-system)
-  - [5. Hidden Anime Deduplication](#5-hidden-anime-deduplication)
-  - [6. Click-to-Bookmark UX](#6-click-to-bookmark-ux)
-  - [7. Responsive Week/Day Navigation](#7-responsive-weekday-navigation)
-- [Environment Variables](#environment-variables)
-- [Getting Started](#getting-started)
-- [Deployment](#deployment)
-
----
-
-## Architecture Overview
-
-```mermaid
-graph TB
-    subgraph Client["🖥️ Client (Browser)"]
-        UI["React Components"]
-        ZS["Zustand Store<br/>(localStorage)"]
-        RQ["React Query<br/>(cache layer)"]
-    end
-
-    subgraph Server["⚙️ Next.js Server (Serverless)"]
-        MW["Clerk Middleware<br/>(proxy.ts)"]
-        API_S["/api/schedule"]
-        API_U["/api/user-preferences"]
-    end
-
-    subgraph External["🌐 External Services"]
-        AS["AnimeSchedule API v3"]
-        MDB["MongoDB Atlas"]
-        CK["Clerk Auth"]
-    end
-
-    UI <--> ZS
-    UI <--> RQ
-    RQ -->|fetch| API_S
-    ZS -->|debounced PUT| API_U
-
-    MW -->|auth check| API_U
-    API_S -->|GET /timetable| AS
-    API_U <-->|read/write| MDB
-    CK -->|JWT validation| MW
-
-    style Client fill:#1a1a2e,color:#ededed,stroke:#3A75C4
-    style Server fill:#2b2b2b,color:#ededed,stroke:#4caf50
-    style External fill:#373737,color:#ededed,stroke:#f0c040
-```
-
----
-
-## Data Flow Diagrams
-
-### User Sign-In & Sync Flow
-
-```mermaid
-sequenceDiagram
-    participant B as Browser
-    participant SP as SyncProvider
-    participant ZS as Zustand Store
-    participant API as /api/user-preferences
-    participant DB as MongoDB
-
-    Note over B: User clicks "Sign In"
-    B->>SP: Clerk isSignedIn = true
-    SP->>API: GET /api/user-preferences
-    API->>DB: findOne({ clerkUserId })
-    DB-->>API: { watchlist, hiddenAnime, savedFilters }
-    API-->>SP: JSON response
-
-    Note over SP: Union merge strategy
-    SP->>SP: mergedWatchlist = Set(DB ∪ Local)
-    SP->>SP: mergedHidden = Set(DB ∪ Local)
-    SP->>SP: mergedFilters = DB ?? Local
-    SP->>ZS: setState(merged)
-    SP->>API: PUT merged data back
-    API->>DB: updateOne({ $set }, { upsert: true })
-
-    Note over SP: Subscribe to future changes
-    ZS-->>SP: onChange (debounced 1.5s)
-    SP->>API: PUT updated state
-    API->>DB: updateOne(...)
-```
-
-### Filter State Machine
-
-```mermaid
-stateDiagram-v2
-    [*] --> Default: Page Load
-
-    Default --> ActiveFilters: User toggles filter pill
-    Default --> SavedPreset: savedFilters exists in store
-
-    SavedPreset --> ActiveFilters: User changes a filter
-    ActiveFilters --> Saved: Clicks "Save Filters"
-    Saved --> SavedPreset: Filters match saved state
-
-    ActiveFilters --> LoadSaved: Clicks "Load Saved"
-    LoadSaved --> SavedPreset: Filters restored
-
-    SavedPreset --> Default: Clicks trash icon (clear preset)
-    Saved --> Default: Clicks trash icon
-
-    state Default {
-        [*] --> AllOff
-        AllOff: showWatchlistOnly=false
-    }
-
-    state SavedPreset {
-        [*] --> Applied
-        Applied: ✓ "Saved Preset" badge shown
-    }
-```
-
----
-
 ## Tech Stack
 
 | Layer | Technology | Purpose |
@@ -187,6 +63,44 @@ src/
 ```
 
 ---
+
+## Architecture Overview
+
+```mermaid
+graph TB
+    subgraph Client["🖥️ Client (Browser)"]
+        UI["React Components"]
+        ZS["Zustand Store<br/>(localStorage)"]
+        RQ["React Query<br/>(cache layer)"]
+    end
+
+    subgraph Server["⚙️ Next.js Server (Serverless)"]
+        MW["Clerk Middleware<br/>(proxy.ts)"]
+        API_S["/api/schedule"]
+        API_U["/api/user-preferences"]
+    end
+
+    subgraph External["🌐 External Services"]
+        AS["AnimeSchedule API v3"]
+        MDB["MongoDB Atlas"]
+        CK["Clerk Auth"]
+    end
+
+    UI <--> ZS
+    UI <--> RQ
+    RQ -->|fetch| API_S
+    ZS -->|debounced PUT| API_U
+
+    MW -->|auth check| API_U
+    API_S -->|GET /timetable| AS
+    API_U <-->|read/write| MDB
+    CK -->|JWT validation| MW
+
+    style Client fill:#1a1a2e,color:#ededed,stroke:#3A75C4
+    style Server fill:#2b2b2b,color:#ededed,stroke:#4caf50
+    style External fill:#373737,color:#ededed,stroke:#f0c040
+```
+
 
 ## Key Features & Creative Solutions
 

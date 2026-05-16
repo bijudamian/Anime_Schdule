@@ -21,7 +21,6 @@ A **dark-themed, responsive** weekly anime timetable that pulls live airing data
 - [Project Structure](#project-structure)
 - [Key Features & Creative Solutions](#key-features--creative-solutions)
   - [1. Bidirectional Sync Engine](#1-bidirectional-sync-engine-syncprovidertsx)
-  - [2. Smart Torrent Resolver](#2-smart-torrent-resolver-watchlist-download-api)
   - [3. Timezone-Aware Calendar Rendering](#3-timezone-aware-calendar-rendering)
   - [4. Filter Persistence System](#4-filter-persistence-system)
   - [5. Hidden Anime Deduplication](#5-hidden-anime-deduplication)
@@ -47,27 +46,22 @@ graph TB
         MW["Clerk Middleware<br/>(proxy.ts)"]
         API_S["/api/schedule"]
         API_U["/api/user-preferences"]
-        API_D["/api/watchlist-download"]
     end
 
     subgraph External["🌐 External Services"]
         AS["AnimeSchedule API v3"]
         MDB["MongoDB Atlas"]
         CK["Clerk Auth"]
-        NY["Torrent Provider"]
     end
 
     UI <--> ZS
     UI <--> RQ
     RQ -->|fetch| API_S
     ZS -->|debounced PUT| API_U
-    UI -->|POST| API_D
 
     MW -->|auth check| API_U
     API_S -->|GET /timetable| AS
     API_U <-->|read/write| MDB
-    API_D -->|search| AS
-    API_D -->|Search| NY
     CK -->|JWT validation| MW
 
     style Client fill:#1a1a2e,color:#ededed,stroke:#3A75C4
@@ -108,41 +102,6 @@ sequenceDiagram
     ZS-->>SP: onChange (debounced 1.5s)
     SP->>API: PUT updated state
     API->>DB: updateOne(...)
-```
-
-### Torrent Download Pipeline
-
-```mermaid
-flowchart TD
-    A["User clicks 'Download All'"] --> B["POST /api/watchlist-download"]
-    B --> C{"For each watchlist item"}
-    C --> D["Query AnimeSchedule API<br/>→ resolve romaji title"]
-    D --> E["Fetch episode detail<br/>→ get latest aired ep#"]
-    E --> F{"ep# > latest aired?"}
-    F -->|Yes| G["⚠️ Skip: not yet aired"]
-    F -->|No| H["Search Torrent Provider"]
-
-    H --> I["Pass 1: First word<br/>of romaji title"]
-    I --> J{"Fuzzy matches found?"}
-    J -->|Yes| K["Filter by episode #"]
-    J -->|No| L["Pass 2: Full romaji title"]
-    L --> M{"Fuzzy matches found?"}
-    M -->|Yes| K
-    M -->|No| N["Pass 3: Canonical title<br/>first word"]
-    N --> K
-
-    K --> O{"Candidates with<br/>correct episode?"}
-    O -->|Yes| P["Sort by seeders ↓<br/>Pick highest"]
-    O -->|No| G
-    P --> Q["Download .torrent file"]
-    Q --> R["Add to ZIP archive"]
-
-    R --> C
-    C -->|All items processed| S["Return ZIP to browser"]
-
-    style A fill:#3A75C4,color:white
-    style S fill:#4caf50,color:white
-    style G fill:#f0c040,color:#222
 ```
 
 ### Filter State Machine
@@ -190,8 +149,6 @@ stateDiagram-v2
 | **Auth** | Clerk (`@clerk/nextjs`) | OAuth / email auth, session management, middleware protection |
 | **Database** | MongoDB Atlas (via `mongodb` driver) | Cloud-persisted user preferences |
 | **Icons** | Lucide React | Consistent, tree-shakeable SVG icon set |
-| **Torrent Parsing** | Custom XML parser | Lightweight XML parsing without heavy dependencies |
-| **ZIP Generation** | JSZip | Client-downloadable torrent bundles |
 
 ---
 
@@ -205,8 +162,7 @@ src/
 │   ├── globals.css             # Tailwind v4 @theme tokens + dark theme base
 │   └── api/
 │       ├── schedule/           # GET: proxies AnimeSchedule timetable API
-│       ├── user-preferences/   # GET/PUT: Clerk-protected MongoDB CRUD
-│       └── watchlist-download/ # POST: torrent search + ZIP generation
+│       └── user-preferences/   # GET/PUT: Clerk-protected MongoDB CRUD
 │
 ├── components/
 │   ├── Timetable.tsx           # Main orchestrator: fetch → normalize → filter → render
@@ -216,8 +172,7 @@ src/
 │   ├── AuthButton.tsx          # Gradient sign-in button / user avatar
 │   ├── SyncProvider.tsx        # Bidirectional Zustand ↔ MongoDB sync bridge
 │   ├── Providers.tsx           # QueryClient + SyncProvider wrapper
-│   ├── DayDropdown.tsx         # Per-day context menu with torrent actions
-│   └── DownloadWatchlistButton.tsx  # ZIP download trigger
+│   └── DayDropdown.tsx         # Per-day context menu
 │
 ├── store/
 │   └── useWatchlistStore.ts    # Zustand store: watchlist, hidden, savedFilters
@@ -254,29 +209,9 @@ The merged result is pushed to **both** the Zustand store and the database, ensu
 - `isSavingRef` acts as a mutex to prevent overlapping PUT requests.
 - Zustand's `subscribe()` provides a framework-agnostic way to watch for changes without coupling to React's render cycle.
 
-### 2. Smart Torrent Resolver (Watchlist Download API)
-
-**Problem**: Given an anime title like *"The Apothecary Diaries"*, find the correct `.torrent` file for a specific episode — despite inconsistent naming conventions across release groups.
-
-**Solution**: A **3-pass fuzzy matching pipeline**:
-
-| Pass | Search Query | Rationale |
-|:-----|:-------------|:----------|
-| **1** | First word of romaji title (e.g., `"Kusuriya"`) | Search indexes often use romaji titles; a single keyword minimizes noise |
-| **2** | Full romaji title | Fallback if Pass 1 is too ambiguous |
-| **3** | First word of canonical (English) title | Catches shows indexed under English names |
-
-Each pass uses **Jaccard similarity** (threshold ≥ 35%) between tokenized title strings, with stop-word filtering for Japanese particles (`no`, `wo`, `wa`, etc.) to prevent false positives.
-
-```
-Jaccard(A, B) = |A ∩ B| / |A ∪ B|
-```
-
-The winning candidate is selected by **highest seeder count** after verifying the episode number matches.
-
 ---
 
-### 3. Timezone-Aware Calendar Rendering
+### 2. Timezone-Aware Calendar Rendering
 
 **Problem**: The API returns air times in UTC. Users in different timezones need to see shows on the correct day column.
 
@@ -367,9 +302,6 @@ CLERK_SECRET_KEY=sk_test_...
 # MongoDB Atlas
 MONGODB_URI=mongodb+srv://user:pass@cluster.mongodb.net/
 MONGODB_DB=anime_schedule
-
-# AnimeSchedule API (optional — for torrent download feature)
-ANIMESCHEDULE_TOKEN=your_bearer_token
 ```
 
 | Variable | Required | Scope |
@@ -378,7 +310,6 @@ ANIMESCHEDULE_TOKEN=your_bearer_token
 | `CLERK_SECRET_KEY` | ✅ | Server only |
 | `MONGODB_URI` | ✅ | Server only |
 | `MONGODB_DB` | ❌ | Server only (defaults to `anime_schedule`) |
-| `ANIMESCHEDULE_TOKEN` | ❌ | Server only (enables torrent downloads) |
 
 ---
 

@@ -179,7 +179,7 @@ async function fetchSchedule(weekOffset: number): Promise<TimetableShow[]> {
 }
 
 export default function Timetable() {
-    const { watchlist, hiddenAnime, unhideAnime, clearHidden } = useWatchlistStore();
+    const { watchlist, hiddenAnime, unhideAnime, clearHidden, savedFilters } = useWatchlistStore();
 
     // Use state to force the client date to hydrate perfectly and roll over at midnight
     const [currentTime, setCurrentTime] = useState<Date | null>(null);
@@ -198,6 +198,15 @@ export default function Timetable() {
         subOnly: false,
         dubOnly: false,
     });
+
+    // Auto-apply saved filter preset on mount
+    const [hasLoadedSaved, setHasLoadedSaved] = useState(false);
+    useEffect(() => {
+        if (!hasLoadedSaved && savedFilters) {
+            setFilters(savedFilters);
+            setHasLoadedSaved(true);
+        }
+    }, [savedFilters, hasLoadedSaved]);
 
     const [dayOffset, setDayOffset] = useState(0);
 
@@ -322,6 +331,7 @@ export default function Timetable() {
             <FilterBar
                 filters={filters}
                 onToggleFilter={toggleFilter}
+                onSetFilters={(f) => setFilters(f)}
                 watchlistCount={watchlist.length}
                 watchlistTitles={watchlistTitles}
                 hiddenAnimeData={hiddenAnimeData}

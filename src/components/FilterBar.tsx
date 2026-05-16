@@ -1,16 +1,18 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { Filter, List, X, EyeOff, RotateCcw } from "lucide-react";
+import { Filter, List, X, EyeOff, RotateCcw, Save, Check, Trash2 } from "lucide-react";
 import type { FilterState } from "@/types/types";
+import { useWatchlistStore } from "@/store/useWatchlistStore";
 
 import DownloadWatchlistButton from "./DownloadWatchlistButton";
+import AuthButton from "./AuthButton";
 
 // ─────────────────────────────────────────────────────────
 // FilterBar — top toolbar with pill-shaped toggle buttons
 //
-// Layout: [Filters] [All Anime ↔ My Watchlist] | [No Donghua] [TV] [ONA] | [SUB] [DUB] | [Hidden (N)]
-//         + Right Side: custom content (e.g. Week Navigation)
+// Layout: [Filters] [All Anime ↔ My Watchlist] | [No Donghua] [TV] [ONA] | [SUB] [DUB] | [Save Filters] | [Hidden (N)]
+//         + Right Side: custom content (e.g. Week Navigation) + Auth
 // ─────────────────────────────────────────────────────────
 
 interface HiddenAnimeItem {
@@ -21,6 +23,7 @@ interface HiddenAnimeItem {
 interface FilterBarProps {
     filters: FilterState;
     onToggleFilter: (key: keyof FilterState) => void;
+    onSetFilters: (filters: FilterState) => void;
     watchlistCount: number;
     watchlistTitles: string[];
     rightContent?: React.ReactNode;
@@ -59,9 +62,27 @@ function PillButton({
     );
 }
 
+/** Check if any non-default filter is active */
+function hasActiveFilters(f: FilterState): boolean {
+    return f.noDonghua || f.tvOnly || f.onaOnly || f.subOnly || f.dubOnly || f.showWatchlistOnly;
+}
+
+/** Check if two filter states are identical */
+function filtersMatch(a: FilterState, b: FilterState): boolean {
+    return (
+        a.showWatchlistOnly === b.showWatchlistOnly &&
+        a.noDonghua === b.noDonghua &&
+        a.tvOnly === b.tvOnly &&
+        a.onaOnly === b.onaOnly &&
+        a.subOnly === b.subOnly &&
+        a.dubOnly === b.dubOnly
+    );
+}
+
 export default function FilterBar({
     filters,
     onToggleFilter,
+    onSetFilters,
     watchlistCount,
     watchlistTitles,
     rightContent,
@@ -71,6 +92,10 @@ export default function FilterBar({
 }: FilterBarProps) {
     const [hiddenDropdownOpen, setHiddenDropdownOpen] = useState(false);
     const dropdownRef = useRef<HTMLDivElement>(null);
+    const { savedFilters, saveFilters, clearSavedFilters } = useWatchlistStore();
+
+    // Flash feedback when filters are saved
+    const [justSaved, setJustSaved] = useState(false);
 
     // Close dropdown on click outside
     useEffect(() => {
@@ -84,6 +109,25 @@ export default function FilterBar({
             return () => document.removeEventListener("mousedown", handleClickOutside);
         }
     }, [hiddenDropdownOpen]);
+
+    const handleSaveFilters = () => {
+        saveFilters(filters);
+        setJustSaved(true);
+        setTimeout(() => setJustSaved(false), 2000);
+    };
+
+    const handleLoadSaved = () => {
+        if (savedFilters) {
+            onSetFilters(savedFilters);
+        }
+    };
+
+    const handleClearSaved = () => {
+        clearSavedFilters();
+    };
+
+    // Determine if current filters match saved
+    const currentMatchesSaved = savedFilters ? filtersMatch(filters, savedFilters) : false;
 
     return (
         <div className="flex flex-wrap items-center gap-2 px-4 py-3"
@@ -172,6 +216,59 @@ export default function FilterBar({
                     DUB
                 </PillButton>
 
+                {/* ── Save / Load Filters ── */}
+                <div className="mx-1 h-5 w-px bg-gray-600" />
+
+                {/* Save button: only shown when filters differ from saved or no saved preset exists */}
+                {hasActiveFilters(filters) && !currentMatchesSaved && (
+                    <button
+                        onClick={handleSaveFilters}
+                        className="inline-flex items-center gap-1.5 rounded-sm px-3 py-1.5 text-xs font-semibold transition-all duration-200 select-none cursor-pointer bg-emerald-500/20 text-emerald-400 hover:bg-emerald-500/30 border border-emerald-500/30"
+                    >
+                        <Save className="h-3.5 w-3.5" />
+                        Save Filters
+                    </button>
+                )}
+
+                {/* Just-saved confirmation */}
+                {justSaved && (
+                    <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-400 animate-pulse">
+                        <Check className="h-3.5 w-3.5" />
+                        Saved!
+                    </span>
+                )}
+
+                {/* Saved preset indicator + Load + Clear */}
+                {savedFilters && !currentMatchesSaved && !justSaved && (
+                    <button
+                        onClick={handleLoadSaved}
+                        className="inline-flex items-center gap-1.5 rounded-sm px-3 py-1.5 text-xs font-semibold transition-all duration-200 select-none cursor-pointer bg-amber-500/15 text-amber-400 hover:bg-amber-500/25 border border-amber-500/25"
+                        title="Apply your saved filter preset"
+                    >
+                        <RotateCcw className="h-3 w-3" />
+                        Load Saved
+                    </button>
+                )}
+
+                {/* Active saved indicator (when current matches saved) */}
+                {currentMatchesSaved && (
+                    <span className="inline-flex items-center gap-1 rounded-sm px-2.5 py-1.5 text-[11px] font-semibold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20">
+                        <Check className="h-3 w-3" />
+                        Saved Preset
+                    </span>
+                )}
+
+                {/* Clear saved button */}
+                {savedFilters && (
+                    <button
+                        onClick={handleClearSaved}
+                        className="inline-flex items-center gap-1 rounded-sm p-1.5 text-gray-500 hover:text-red-400 transition-colors cursor-pointer"
+                        title="Clear saved filter preset"
+                    >
+                        <Trash2 className="h-3 w-3" />
+                    </button>
+                )}
+
                 {/* ── Hidden Anime Bubble ── */}
                 {hiddenAnimeData.length > 0 && (
                     <>
@@ -248,12 +345,12 @@ export default function FilterBar({
                 )}
             </div>
 
-            {/* ── Right Side: Custom Content (e.g. Week Navigation) ── */}
-            {rightContent && (
-                <div className="flex items-center ml-auto">
-                    {rightContent}
-                </div>
-            )}
+            {/* ── Right Side: Custom Content + Auth ── */}
+            <div className="flex items-center gap-3 ml-auto">
+                {rightContent}
+                <div className="mx-1 h-5 w-px bg-gray-600" />
+                <AuthButton />
+            </div>
         </div>
     );
 }

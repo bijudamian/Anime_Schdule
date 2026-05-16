@@ -8,18 +8,10 @@ import type { AnimeCardData } from "@/types/types";
 // ─────────────────────────────────────────────────────────
 // AnimeCard — individual anime entry in a timetable column
 //
-// Layout (from top to bottom):
-//   ┌─────────────────────────────┐
-//   │  Ep N  │  07:00 PM  │  SUB  │  ← dark semi-transparent bar
-//   │─────────────────────────────│
-//   │  ⚠ Delayed / Hiatus        │  ← yellow status bar (conditional)
-//   │                             │
-//   │       (cover image)         │
-//   │                             │
-//   │  ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓  │  ← bottom gradient
-//   │  Anime Title (2-line clamp) │
-//   └─────────────────────────────┘
-//   Hover → bookmark + hide overlay
+// Behavior:
+//   • Click anywhere on the tile → toggles bookmark
+//   • Hover → shows bookmark + hide (X) overlay buttons
+//   • Both buttons on the overlay also work independently
 // ─────────────────────────────────────────────────────────
 
 interface AnimeCardProps {
@@ -38,7 +30,11 @@ export default function AnimeCard({ anime }: AnimeCardProps) {
         : "/placeholder.png";
 
     return (
-        <div className="group relative w-full overflow-hidden rounded-sm cursor-pointer" style={{ aspectRatio: "3/4" }}>
+        <div
+            className="group relative w-full overflow-hidden rounded-sm cursor-pointer"
+            style={{ aspectRatio: "3/4" }}
+            onClick={() => toggleAnime(anime.id)}
+        >
             {/* ── Background Cover Image ── */}
             <Image
                 src={imageUrl}

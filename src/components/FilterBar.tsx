@@ -1,6 +1,7 @@
 "use client";
 
-import { Filter, List, X } from "lucide-react";
+import { useState, useRef, useEffect } from "react";
+import { Filter, List, X, EyeOff, RotateCcw } from "lucide-react";
 import type { FilterState } from "@/types/types";
 
 import DownloadWatchlistButton from "./DownloadWatchlistButton";
@@ -8,9 +9,14 @@ import DownloadWatchlistButton from "./DownloadWatchlistButton";
 // ─────────────────────────────────────────────────────────
 // FilterBar — top toolbar with pill-shaped toggle buttons
 //
-// Layout: [Filters] [Anime List Always Visible] [No Donghua] [TV] [ONA]
-//         + Primary: [All Anime ↔ My Watchlist]
+// Layout: [Filters] [All Anime ↔ My Watchlist] | [No Donghua] [TV] [ONA] | [SUB] [DUB] | [Hidden (N)]
+//         + Right Side: custom content (e.g. Week Navigation)
 // ─────────────────────────────────────────────────────────
+
+interface HiddenAnimeItem {
+    id: string;
+    title: string;
+}
 
 interface FilterBarProps {
     filters: FilterState;
@@ -18,6 +24,9 @@ interface FilterBarProps {
     watchlistCount: number;
     watchlistTitles: string[];
     rightContent?: React.ReactNode;
+    hiddenAnimeData?: HiddenAnimeItem[];
+    onUnhideAnime?: (id: string) => void;
+    onClearHidden?: () => void;
 }
 
 function PillButton({
@@ -56,7 +65,26 @@ export default function FilterBar({
     watchlistCount,
     watchlistTitles,
     rightContent,
+    hiddenAnimeData = [],
+    onUnhideAnime,
+    onClearHidden,
 }: FilterBarProps) {
+    const [hiddenDropdownOpen, setHiddenDropdownOpen] = useState(false);
+    const dropdownRef = useRef<HTMLDivElement>(null);
+
+    // Close dropdown on click outside
+    useEffect(() => {
+        function handleClickOutside(e: MouseEvent) {
+            if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+                setHiddenDropdownOpen(false);
+            }
+        }
+        if (hiddenDropdownOpen) {
+            document.addEventListener("mousedown", handleClickOutside);
+            return () => document.removeEventListener("mousedown", handleClickOutside);
+        }
+    }, [hiddenDropdownOpen]);
+
     return (
         <div className="flex flex-wrap items-center gap-2 px-4 py-3"
             style={{ backgroundColor: "#333" }}>
@@ -143,6 +171,81 @@ export default function FilterBar({
                 >
                     DUB
                 </PillButton>
+
+                {/* ── Hidden Anime Bubble ── */}
+                {hiddenAnimeData.length > 0 && (
+                    <>
+                        <div className="mx-1 h-5 w-px bg-gray-600" />
+                        <div className="relative" ref={dropdownRef}>
+                            <button
+                                onClick={() => setHiddenDropdownOpen(!hiddenDropdownOpen)}
+                                className={`
+                                    inline-flex items-center gap-1.5 rounded-sm px-3 py-1.5 text-xs font-semibold
+                                    transition-all duration-200 select-none cursor-pointer
+                                    ${hiddenDropdownOpen
+                                        ? "bg-red-500/20 text-red-300 ring-1 ring-red-500/30"
+                                        : "bg-pill-inactive text-gray-300 hover:bg-surface-light"
+                                    }
+                                `}
+                            >
+                                <EyeOff className="h-3.5 w-3.5" />
+                                Hidden
+                                <span className="ml-0.5 rounded-full bg-red-500/30 px-1.5 py-0.5 text-[10px] text-red-300">
+                                    {hiddenAnimeData.length}
+                                </span>
+                            </button>
+
+                            {/* Dropdown list */}
+                            {hiddenDropdownOpen && (
+                                <div
+                                    className="absolute top-full left-0 mt-2 z-50 w-72 max-h-80 overflow-y-auto rounded-md border border-gray-600 shadow-xl"
+                                    style={{ backgroundColor: "#2a2a2a" }}
+                                >
+                                    {/* Header */}
+                                    <div className="flex items-center justify-between px-3 py-2 border-b border-gray-600">
+                                        <span className="text-xs font-semibold text-gray-300">
+                                            Hidden Anime ({hiddenAnimeData.length})
+                                        </span>
+                                        {onClearHidden && (
+                                            <button
+                                                onClick={() => {
+                                                    onClearHidden();
+                                                    setHiddenDropdownOpen(false);
+                                                }}
+                                                className="flex items-center gap-1 text-[10px] text-gray-400 hover:text-white transition-colors"
+                                            >
+                                                <RotateCcw className="h-3 w-3" />
+                                                Unhide All
+                                            </button>
+                                        )}
+                                    </div>
+
+                                    {/* List */}
+                                    <div className="py-1">
+                                        {hiddenAnimeData.map((item) => (
+                                            <div
+                                                key={item.id}
+                                                className="flex items-center justify-between px-3 py-2 hover:bg-white/5 transition-colors"
+                                            >
+                                                <span className="text-xs text-gray-300 truncate mr-2 flex-1">
+                                                    {item.title}
+                                                </span>
+                                                {onUnhideAnime && (
+                                                    <button
+                                                        onClick={() => onUnhideAnime(item.id)}
+                                                        className="shrink-0 text-[10px] font-semibold text-brand-blue hover:text-white px-2 py-0.5 rounded bg-brand-blue/10 hover:bg-brand-blue/30 transition-colors"
+                                                    >
+                                                        Show
+                                                    </button>
+                                                )}
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    </>
+                )}
             </div>
 
             {/* ── Right Side: Custom Content (e.g. Week Navigation) ── */}

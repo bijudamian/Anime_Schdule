@@ -1,63 +1,282 @@
-# 📅 Anime Tracker & Scheduler
+<p align="center">
+  <img src="https://img.shields.io/badge/Next.js-16.1.6-000000?style=for-the-badge&logo=next.js" />
+  <img src="https://img.shields.io/badge/React-19.2-61DAFB?style=for-the-badge&logo=react" />
+  <img src="https://img.shields.io/badge/TypeScript-5.x-3178C6?style=for-the-badge&logo=typescript" />
+  <img src="https://img.shields.io/badge/Tailwind_CSS-4.x-06B6D4?style=for-the-badge&logo=tailwind-css" />
+  <img src="https://img.shields.io/badge/MongoDB-7.x-47A248?style=for-the-badge&logo=mongodb" />
+  <img src="https://img.shields.io/badge/Clerk-Auth-6C47FF?style=for-the-badge&logo=clerk" />
+</p>
 
-A highly-customized, production-ready weekly anime release schedule. This application is a fully functional web app designed to mimic the elegant, dark-themed user interface of AnimeSchedule.net, while adding powerful, personalized features like a local *"Watching"* dashboard and dynamic RSS scraping.
+# 🗓️ Anime Schedule — Weekly Anime Release Calendar
+
+A **dark-themed, responsive** weekly anime timetable that pulls live airing data from the [AnimeSchedule.net](https://animeschedule.net) API, renders it in a 7-column calendar grid, and lets users build a personal watchlist with cloud sync — all powered by **Next.js App Router**, **Clerk Auth**, and **MongoDB Atlas**.
+
+---
+## Tech Stack
+
+| Layer | Technology | Purpose |
+|:------|:-----------|:--------|
+| **Framework** | Next.js 16 (App Router) | Full-stack React framework with serverless API routes |
+| **Language** | TypeScript 5.x | End-to-end type safety |
+| **UI Library** | React 19 | Component rendering |
+| **Styling** | Tailwind CSS 4 | Utility-first CSS with custom theme tokens |
+| **State** | Zustand 5 + `persist` middleware | Client-side state persisted to `localStorage` |
+| **Data Fetching** | TanStack React Query 5 | Server state caching, deduplication, auto-refetch |
+| **Auth** | Clerk (`@clerk/nextjs`) | OAuth / email auth, session management, middleware protection |
+| **Database** | MongoDB Atlas (via `mongodb` driver) | Cloud-persisted user preferences |
+| **Icons** | Lucide React | Consistent, tree-shakeable SVG icon set |
+
+---
+
+## Project Structure
+
+```
+src/
+├── app/
+│   ├── layout.tsx              # Root layout: ClerkProvider + Providers wrapper
+│   ├── page.tsx                # Entry point: renders <Timetable />
+│   ├── globals.css             # Tailwind v4 @theme tokens + dark theme base
+│   └── api/
+│       ├── schedule/           # GET: proxies AnimeSchedule timetable API
+│       └── user-preferences/   # GET/PUT: Clerk-protected MongoDB CRUD
+│
+├── components/
+│   ├── Timetable.tsx           # Main orchestrator: fetch → normalize → filter → render
+│   ├── CalendarHeader.tsx      # 7-column day header with date labels
+│   ├── AnimeCard.tsx           # Individual anime tile with hover overlay
+│   ├── FilterBar.tsx           # Pill-based filter controls + save/load presets
+│   ├── AuthButton.tsx          # Gradient sign-in button / user avatar
+│   ├── SyncProvider.tsx        # Bidirectional Zustand ↔ MongoDB sync bridge
+│   ├── Providers.tsx           # QueryClient + SyncProvider wrapper
+│   └── DayDropdown.tsx         # Per-day context menu
+│
+├── store/
+│   └── useWatchlistStore.ts    # Zustand store: watchlist, hidden, savedFilters
+│
+├── lib/
+│   └── mongodb.ts              # Singleton MongoDB client (global cache for HMR)
+│
+├── types/
+│   └── types.ts                # Shared TypeScript interfaces
+│
+└── proxy.ts                    # Clerk middleware (renamed from middleware.ts)
+```
+
+---
+
+## Architecture Overview
+
+```mermaid
+graph TB
+    subgraph Client["🖥️ Client (Browser)"]
+        UI["React Components"]
+        ZS["Zustand Store<br/>(localStorage)"]
+        RQ["React Query<br/>(cache layer)"]
+    end
+
+    subgraph Server["⚙️ Next.js Server (Serverless)"]
+        MW["Clerk Middleware<br/>(proxy.ts)"]
+        API_S["/api/schedule"]
+        API_U["/api/user-preferences"]
+    end
+
+    subgraph External["🌐 External Services"]
+        AS["AnimeSchedule API v3"]
+        MDB["MongoDB Atlas"]
+        CK["Clerk Auth"]
+    end
+
+    UI <--> ZS
+    UI <--> RQ
+    RQ -->|fetch| API_S
+    ZS -->|debounced PUT| API_U
+
+    MW -->|auth check| API_U
+    API_S -->|GET /timetable| AS
+    API_U <-->|read/write| MDB
+    CK -->|JWT validation| MW
+
+    style Client fill:#1a1a2e,color:#ededed,stroke:#3A75C4
+    style Server fill:#2b2b2b,color:#ededed,stroke:#4caf50
+    style External fill:#373737,color:#ededed,stroke:#f0c040
+```
 
 
-## 🎯 The Purpose
-Keeping up with seasonal anime releases can be a massive headache. Different shows drop on different days, in different timezones, and tracking down the episodes across various groups right after they release is tedious.
+## Key Features & Creative Solutions
 
-This project solves that by giving you a **beautiful, local-timezone-converted weekly grid**. You can quickly filter what you want to see, bookmark the shows you're actively watching, and seamlessly download the latest release links straight from RSS feeds into a neat `.zip` package with the click of a button.
+### 1. Bidirectional Sync Engine (`SyncProvider.tsx`)
 
-## ✨ Key Features
+**Problem**: Users browse anonymously (data in `localStorage`), then sign in. How do we merge local and cloud data without data loss?
 
-- **7-Day Dynamic Timetable:** A responsive, mobile-friendly schedule that snaps to a single-column block on mobile and a robust 7-column grid on desktop.
-- **Local Time Conversion:** UTC air times are instantly converted to the user's localized browser time. 
-- **Advanced Filtering:** Granular pill-filters allow you to sort out the noise. Strip out Chinese Donghua, isolate Web Releases (ONA) vs TV releases, or sort entirely by **SUB** vs **DUB**.
-- **State-Persisted Watchlist:** Bookmark the anime you care about. Zustand saves your preferences into your browser's `localStorage` so they are always there when you return.
-- **Batch RSS Scraping Engine:** When filtering by your Watchlist, click the `...` on any schedule day to instantly trigger a backend scraper. It searches relevant RSS feeds for the *exact* expected episode, bundles the release files into a `.zip`, and serves the final download straight to your desktop.
+**Solution**: A **union-based merge strategy** executed once per sign-in:
 
-## 🛠️ The Tech Stack
+```
+mergedWatchlist  = Set(database.watchlist  ∪  local.watchlist)
+mergedHidden     = Set(database.hiddenAnime ∪ local.hiddenAnime)
+mergedFilters    = database.savedFilters   ?? local.savedFilters
+```
 
-This project was built to be blazing fast, strictly typed, and incredibly easy to deploy.
+The merged result is pushed to **both** the Zustand store and the database, ensuring consistency. After initial sync, all subsequent store changes are automatically saved to MongoDB via a **1.5-second debounced** subscription listener, preventing API spam during rapid interactions.
 
-- **Framework:** Next.js 14+ (App Router)
-- **Language:** TypeScript exactly configured for frontend and backend API typing
-- **Styling:** Tailwind CSS (Vanilla utilities + Glassmorphism / Dark Theme design system)
-- **State Management:** Zustand (with `persist` middleware)
-- **Data Fetching & Caching:** TanStack React Query v5
-- **Icons:** `lucide-react`
-- **Utility Libraries:** `jszip` (for on-the-fly archive generation)
+**Key decisions**:
+- `hasSyncedRef` (a `useRef`) ensures the merge runs **exactly once** per auth session, not on every re-render.
+- `isSavingRef` acts as a mutex to prevent overlapping PUT requests.
+- Zustand's `subscribe()` provides a framework-agnostic way to watch for changes without coupling to React's render cycle.
 
-## 🚀 Getting Started
+---
 
-To run this application locally, you will need a valid AnimeSchedule v3 API Token.
+### 2. Timezone-Aware Calendar Rendering
 
-**1. Clone the repository:**
+**Problem**: The API returns air times in UTC. Users in different timezones need to see shows on the correct day column.
+
+**Solution**: The `normalizeShow()` function converts each show's `episodeDate` (UTC ISO string) to the user's **local timezone** at two levels:
+
+1. **`getLocalDayIndex()`** — Maps `new Date(isoString).getDay()` (which auto-converts to local) into a Monday-first index (`0=Mon, 6=Sun`).
+2. **`formatLocalTime()`** — Renders the display time via `toLocaleTimeString()`.
+
+This means a show airing at `03:00 UTC Wednesday` correctly appears under **Tuesday** for a `UTC-5` user, and under **Wednesday** for a `UTC+5:30` user.
+
+---
+
+### 4. Filter Persistence System
+
+**Problem**: Users repeatedly configure the same filter combination (e.g., "No Donghua + SUB only") every session.
+
+**Solution**: A **saved filter preset** system with 3 states:
+
+| State | UI Indicator | User Action |
+|:------|:-------------|:------------|
+| No preset saved, filters active | Green `Save Filters` button | Click to save current state |
+| Preset saved, filters match | `✓ Saved Preset` badge | — (auto-applied on mount) |
+| Preset saved, filters diverge | Amber `Load Saved` button | Click to restore preset |
+
+The preset is stored in the Zustand store (`savedFilters: FilterState | null`), persisted to `localStorage`, and synced to MongoDB. On page load, a `useEffect` checks for saved filters and auto-applies them **before** the first render completes.
+
+---
+
+### 5. Hidden Anime Deduplication
+
+**Problem**: Hiding "Naruto" should hide both its SUB and DUB entries, but the API returns them as separate items with different route IDs.
+
+**Solution**: The `hiddenAnimeData` memo in `Timetable.tsx` groups hidden items by their **display title** using a `Map<string, { ids: string[], title: string }>`. When a user clicks "Show" on a grouped entry, **all associated route IDs** are unhidden simultaneously:
+
+```typescript
+const handleUnhideGroup = (ids: string[]) => {
+    ids.forEach((id) => unhideAnime(id));
+};
+```
+
+---
+
+### 6. Click-to-Bookmark UX
+
+**Problem**: Requiring users to hover → find the small bookmark icon → click was too many steps for the most common action.
+
+**Solution**: **Dual interaction model** on `AnimeCard`:
+
+- **Click anywhere on the tile** → Toggles bookmark (via `onClick` on the root `<div>`)
+- **Hover** → Reveals an overlay with **both** the bookmark icon and the ✕ hide icon
+- Overlay buttons use `e.stopPropagation()` to prevent double-toggling
+
+This gives a one-tap bookmark experience on mobile while preserving the granular controls on desktop hover.
+
+---
+
+### 7. Responsive Week/Day Navigation
+
+**Problem**: A 7-column calendar doesn't work on mobile screens.
+
+**Solution**: Two separate navigation modes controlled by a single `dayOffset` state variable:
+
+| Viewport | Navigation | Display |
+|:---------|:-----------|:--------|
+| Desktop (`md:` and up) | `← Prev Week` / `Next Week →` in the filter bar | All 7 columns visible |
+| Mobile (`< md`) | `← Prev Day` / `Next Day →` below the filter bar | Only the selected day column shown |
+
+The `dayOffset` drives both `weekOffset` (which week to fetch) and `selectedDayIndex` (which column to highlight/show), calculated via:
+
+```typescript
+const weekOffset = Math.floor(absoluteDayIndex / 7);
+const selectedDayIndex = ((absoluteDayIndex % 7) + 7) % 7;
+```
+
+This elegantly handles crossing week boundaries in both directions with a single integer.
+
+---
+
+## Environment Variables
+
+Create a `.env.local` file in the project root:
+
+```env
+# Clerk Authentication
+NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_test_...
+CLERK_SECRET_KEY=sk_test_...
+
+# MongoDB Atlas
+MONGODB_URI=mongodb+srv://user:pass@cluster.mongodb.net/
+MONGODB_DB=anime_schedule
+```
+
+| Variable | Required | Scope |
+|:---------|:---------|:------|
+| `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` | ✅ | Client + Server |
+| `CLERK_SECRET_KEY` | ✅ | Server only |
+| `MONGODB_URI` | ✅ | Server only |
+| `MONGODB_DB` | ❌ | Server only (defaults to `anime_schedule`) |
+
+---
+
+## Getting Started
+
 ```bash
+# 1. Clone the repository
 git clone https://github.com/bijudamian/Anime_Schdule.git
 cd Anime_Schdule
-```
 
-**2. Install dependencies:**
-```bash
+# 2. Install dependencies
 npm install
-```
 
-**3. Configure Environment Variables:**
-Create a `.env.local` file in the root directory and add your API credentials:
-```env
-ANIMESCHEDULE_API_BASE=https://animeschedule.net/api/v3
-ANIMESCHEDULE_CLIENT_ID=your_client_id_here
-ANIMESCHEDULE_TOKEN=your_token_here
-```
+# 3. Set up environment variables
+cp .env.example .env.local
+# Edit .env.local with your Clerk keys + MongoDB URI
 
-**4. Start the development server:**
-```bash
+# 4. Start the development server
 npm run dev
+# → http://localhost:3000
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result. All API requests are securely proxied through the Next.js backend (`/api/schedule`) so your credentials are never exposed to the client.
+---
 
-## 🛡️ License
+## Deployment
 
-This project is intended for educational purposes and personal use.
+### Vercel (Recommended)
+
+1. Push to GitHub
+2. Connect the repo in [Vercel Dashboard](https://vercel.com/new)
+3. Add the 3 required environment variables:
+   - `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`
+   - `CLERK_SECRET_KEY`
+   - `MONGODB_URI`
+4. Deploy — Vercel auto-detects Next.js and handles the rest
+
+### MongoDB Connection
+
+The `mongodb.ts` utility uses a **global singleton pattern** to prevent connection pool exhaustion during Next.js HMR (Hot Module Replacement) in development:
+
+```typescript
+let cached = (global as any)._mongoClientPromise;
+if (!cached) {
+    const client = new MongoClient(MONGODB_URI);
+    cached = client.connect();
+    (global as any)._mongoClientPromise = cached;
+}
+```
+
+This ensures only **one** `MongoClient` instance exists across all serverless function invocations in both dev and production.
+
+---
+
+<p align="center">
+  Built with ☕ and <a href="https://nextjs.org">Next.js</a>
+</p>

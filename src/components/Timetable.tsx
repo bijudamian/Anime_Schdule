@@ -179,7 +179,7 @@ async function fetchSchedule(weekOffset: number): Promise<TimetableShow[]> {
 }
 
 export default function Timetable() {
-    const { watchlist } = useWatchlistStore();
+    const { watchlist, hiddenAnime, unhideAnime, clearHidden } = useWatchlistStore();
 
     // Use state to force the client date to hydrate perfectly and roll over at midnight
     const [currentTime, setCurrentTime] = useState<Date | null>(null);
@@ -254,6 +254,9 @@ export default function Timetable() {
 
         let normalized = data.map(normalizeShow);
 
+        // Filter out hidden anime
+        normalized = normalized.filter((s) => !hiddenAnime.includes(s.id));
+
         // Apply filters
         if (filters.showWatchlistOnly) {
             normalized = normalized.filter((s) => watchlist.includes(s.id));
@@ -283,7 +286,35 @@ export default function Timetable() {
         }
 
         return buildWeekSchedule(normalized, now, weekOffset, selectedDayIndex);
-    }, [data, filters, watchlist, currentTime, weekOffset, selectedDayIndex]);
+    }, [data, filters, watchlist, hiddenAnime, currentTime, weekOffset, selectedDayIndex]);
+
+    // Build a deduplicated list of hidden anime with titles for the FilterBar bubble
+    // Groups multiple route IDs (e.g. SUB + DUB) under a single title
+    const hiddenAnimeData = useMemo(() => {
+        if (!data) return [];
+        const titleMap = new Map<string, { ids: string[]; title: string }>();
+        data
+            .filter((s) => hiddenAnime.includes(s.route))
+            .forEach((s) => {
+                const title = s.english || s.title || s.romaji || "Unknown";
+                const existing = titleMap.get(title);
+                if (existing) {
+                    existing.ids.push(s.route);
+                } else {
+                    titleMap.set(title, { ids: [s.route], title });
+                }
+            });
+        return Array.from(titleMap.values()).map((entry) => ({
+            id: entry.ids[0], // primary ID for keying
+            ids: entry.ids,   // all route IDs for this title
+            title: entry.title,
+        }));
+    }, [data, hiddenAnime]);
+
+    // Unhide all route IDs associated with a grouped title entry
+    const handleUnhideGroup = (ids: string[]) => {
+        ids.forEach((id) => unhideAnime(id));
+    };
 
     return (
         <div className="min-h-screen" style={{ backgroundColor: "#2b2b2b" }}>
@@ -293,6 +324,17 @@ export default function Timetable() {
                 onToggleFilter={toggleFilter}
                 watchlistCount={watchlist.length}
                 watchlistTitles={watchlistTitles}
+                hiddenAnimeData={hiddenAnimeData}
+                onUnhideAnime={(id) => {
+                    // Find the group this ID belongs to and unhide all in the group
+                    const group = hiddenAnimeData.find((g) => g.id === id);
+                    if (group) {
+                        handleUnhideGroup(group.ids);
+                    } else {
+                        unhideAnime(id);
+                    }
+                }}
+                onClearHidden={clearHidden}
                 rightContent={
                     <div className="hidden sm:flex items-center gap-3">
                         <button

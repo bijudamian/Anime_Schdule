@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { Bookmark } from "lucide-react";
+import { Bookmark, X } from "lucide-react";
 import { useWatchlistStore } from "@/store/useWatchlistStore";
 import type { AnimeCardData } from "@/types/types";
 
@@ -19,7 +19,7 @@ import type { AnimeCardData } from "@/types/types";
 //   │  ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓  │  ← bottom gradient
 //   │  Anime Title (2-line clamp) │
 //   └─────────────────────────────┘
-//   Hover → bookmark overlay
+//   Hover → bookmark + hide overlay
 // ─────────────────────────────────────────────────────────
 
 interface AnimeCardProps {
@@ -30,7 +30,7 @@ interface AnimeCardProps {
 const CDN_BASE = "https://img.animeschedule.net/production/assets/public/img/";
 
 export default function AnimeCard({ anime }: AnimeCardProps) {
-    const { isWatching, toggleAnime } = useWatchlistStore();
+    const { isWatching, toggleAnime, toggleHidden } = useWatchlistStore();
     const watched = isWatching(anime.id);
 
     const imageUrl = anime.imageUrl
@@ -94,20 +94,38 @@ export default function AnimeCard({ anime }: AnimeCardProps) {
                 </p>
             </div>
 
-            {/* ── Hover: Bookmark Overlay ── */}
+            {/* ── Hover: Bookmark + Hide Overlay ── */}
             <div
-                className="absolute inset-0 z-20 flex items-center justify-center bg-black/40 opacity-0 transition-opacity duration-200 group-hover:opacity-100"
-                onClick={(e) => {
-                    e.stopPropagation();
-                    toggleAnime(anime.id);
-                }}
+                className="absolute inset-0 z-20 flex items-center justify-center gap-4 bg-black/40 opacity-0 transition-opacity duration-200 group-hover:opacity-100"
             >
-                <Bookmark
-                    className={`h-8 w-8 transition-transform duration-150 hover:scale-110 ${watched
+                {/* Bookmark button */}
+                <button
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        toggleAnime(anime.id);
+                    }}
+                    className="flex items-center justify-center rounded-full bg-black/30 p-2 transition-transform duration-150 hover:scale-110 hover:bg-black/50"
+                    title={watched ? "Remove from watchlist" : "Add to watchlist"}
+                >
+                    <Bookmark
+                        className={`h-7 w-7 ${watched
                             ? "fill-brand-blue text-brand-blue"
                             : "fill-none text-white"
-                        }`}
-                />
+                            }`}
+                    />
+                </button>
+
+                {/* Hide button */}
+                <button
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        toggleHidden(anime.id);
+                    }}
+                    className="flex items-center justify-center rounded-full bg-black/30 p-2 transition-transform duration-150 hover:scale-110 hover:bg-red-900/50"
+                    title="Hide from dashboard"
+                >
+                    <X className="h-7 w-7 text-red-400" />
+                </button>
             </div>
 
             {/* ── Persistent bookmark indicator (when watched) ── */}

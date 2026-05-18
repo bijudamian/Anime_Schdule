@@ -33,11 +33,11 @@ export default function SyncProvider({ children }: { children: React.ReactNode }
         if (isSavingRef.current) return;
         isSavingRef.current = true;
         try {
-            const { watchlist, hiddenAnime, savedFilters } = useWatchlistStore.getState();
+            const { watchlist, hiddenAnime, savedFilterPresets } = useWatchlistStore.getState();
             await fetch("/api/user-preferences", {
                 method: "PUT",
                 headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ watchlist, hiddenAnime, savedFilters }),
+                body: JSON.stringify({ watchlist, hiddenAnime, savedFilterPresets }),
             });
         } catch (err) {
             console.error("[SyncProvider] Failed to save:", err);
@@ -80,14 +80,22 @@ export default function SyncProvider({ children }: { children: React.ReactNode }
                     new Set([...(dbData.hiddenAnime || []), ...local.hiddenAnime])
                 );
 
-                // For savedFilters: DB wins if it exists, otherwise keep local
-                const mergedSavedFilters = dbData.savedFilters ?? local.savedFilters;
+                // For savedFilterPresets: DB wins per-slot if it exists, otherwise keep local
+                // Also handle legacy savedFilters migration from DB
+                const dbPresets = dbData.savedFilterPresets ?? [
+                    dbData.savedFilters ?? null,
+                    null,
+                ];
+                const mergedPresets = [
+                    dbPresets[0] ?? local.savedFilterPresets[0],
+                    dbPresets[1] ?? local.savedFilterPresets[1],
+                ];
 
                 // Update the store with merged data
                 useWatchlistStore.setState({
                     watchlist: mergedWatchlist,
                     hiddenAnime: mergedHidden,
-                    savedFilters: mergedSavedFilters,
+                    savedFilterPresets: mergedPresets as [typeof mergedPresets[0], typeof mergedPresets[1]],
                 });
 
                 // Push merged result back to the DB
@@ -97,7 +105,7 @@ export default function SyncProvider({ children }: { children: React.ReactNode }
                     body: JSON.stringify({
                         watchlist: mergedWatchlist,
                         hiddenAnime: mergedHidden,
-                        savedFilters: mergedSavedFilters,
+                        savedFilterPresets: mergedPresets,
                     }),
                 });
             } catch (err) {

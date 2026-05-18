@@ -9,6 +9,9 @@ import type { FilterState } from "@/types/types";
 // Persisted to localStorage so it survives page reloads.
 // ─────────────────────────────────────────────────────────
 
+/** Two preset slots for saved filters */
+type FilterPresets = [FilterState | null, FilterState | null];
+
 interface WatchlistState {
     /** Array of anime route IDs the user is watching */
     watchlist: string[];
@@ -37,13 +40,22 @@ interface WatchlistState {
     /** Clear all hidden anime */
     clearHidden: () => void;
 
-    /** Saved filter preset — auto-applied on page load */
+    /** @deprecated Kept for migration — use savedFilterPresets instead */
     savedFilters: FilterState | null;
 
-    /** Save the current filter state as a preset */
+    /** Two preset slots for saved filter configurations */
+    savedFilterPresets: FilterPresets;
+
+    /** Save the current filter state into a preset slot (0 or 1) */
+    saveFilterPreset: (slot: number, filters: FilterState) => void;
+
+    /** Clear a specific preset slot */
+    clearFilterPreset: (slot: number) => void;
+
+    /** Legacy: Save filters (writes to slot 0 for compat) */
     saveFilters: (filters: FilterState) => void;
 
-    /** Clear the saved filter preset */
+    /** Legacy: Clear saved filters (clears slot 0 for compat) */
     clearSavedFilters: () => void;
 }
 
@@ -53,6 +65,7 @@ export const useWatchlistStore = create<WatchlistState>()(
             watchlist: [],
             hiddenAnime: [],
             savedFilters: null,
+            savedFilterPresets: [null, null] as FilterPresets,
 
             toggleAnime: (id: string) => {
                 const current = get().watchlist;
@@ -92,17 +105,44 @@ export const useWatchlistStore = create<WatchlistState>()(
                 set({ hiddenAnime: [] });
             },
 
+            saveFilterPreset: (slot: number, filters: FilterState) => {
+                const presets = [...get().savedFilterPresets] as FilterPresets;
+                presets[slot] = filters;
+                set({ savedFilterPresets: presets });
+            },
+
+            clearFilterPreset: (slot: number) => {
+                const presets = [...get().savedFilterPresets] as FilterPresets;
+                presets[slot] = null;
+                set({ savedFilterPresets: presets });
+            },
+
+            // Legacy compat
             saveFilters: (filters: FilterState) => {
-                set({ savedFilters: filters });
+                const presets = [...get().savedFilterPresets] as FilterPresets;
+                presets[0] = filters;
+                set({ savedFilters: filters, savedFilterPresets: presets });
             },
 
             clearSavedFilters: () => {
-                set({ savedFilters: null });
+                const presets = [...get().savedFilterPresets] as FilterPresets;
+                presets[0] = null;
+                set({ savedFilters: null, savedFilterPresets: presets });
             },
         }),
         {
             name: "anime-watchlist", // localStorage key
             storage: createJSONStorage(() => localStorage),
+            version: 1,
+            migrate: (persisted: unknown, version: number) => {
+                const state = persisted as Record<string, unknown>;
+                if (version === 0 || !state.savedFilterPresets) {
+                    // Migrate old single savedFilters into slot 0
+                    const legacy = state.savedFilters as FilterState | null;
+                    state.savedFilterPresets = [legacy || null, null];
+                }
+                return state as unknown as WatchlistState;
+            },
         }
     )
 );

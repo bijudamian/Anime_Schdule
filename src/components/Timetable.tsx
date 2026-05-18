@@ -179,7 +179,7 @@ async function fetchSchedule(weekOffset: number): Promise<TimetableShow[]> {
 }
 
 export default function Timetable() {
-    const { watchlist, hiddenAnime, unhideAnime, clearHidden, savedFilters } = useWatchlistStore();
+    const { watchlist, hiddenAnime, unhideAnime, clearHidden, savedFilterPresets } = useWatchlistStore();
 
     // Use state to force the client date to hydrate perfectly and roll over at midnight
     const [currentTime, setCurrentTime] = useState<Date | null>(null);
@@ -199,14 +199,18 @@ export default function Timetable() {
         dubOnly: false,
     });
 
-    // Auto-apply saved filter preset on mount
+    // Auto-apply first saved filter preset on mount
     const [hasLoadedSaved, setHasLoadedSaved] = useState(false);
     useEffect(() => {
-        if (!hasLoadedSaved && savedFilters) {
-            setFilters(savedFilters);
+        if (!hasLoadedSaved) {
+            // Apply the first non-null preset
+            const preset = savedFilterPresets[0] ?? savedFilterPresets[1];
+            if (preset) {
+                setFilters(preset);
+            }
             setHasLoadedSaved(true);
         }
-    }, [savedFilters, hasLoadedSaved]);
+    }, [savedFilterPresets, hasLoadedSaved]);
 
     const [dayOffset, setDayOffset] = useState(0);
 

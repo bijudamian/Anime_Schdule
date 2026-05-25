@@ -9,6 +9,7 @@ import { NextResponse } from "next/server";
 
 const API_BASE = process.env.ANIMESCHEDULE_API_BASE || "https://animeschedule.net/api/v3";
 const TOKEN = process.env.ANIMESCHEDULE_TOKEN;
+const CLIENT_ID = process.env.ANIMESCHEDULE_CLIENT_ID;
 
 export async function GET(request: Request) {
     if (!TOKEN) {
@@ -27,6 +28,7 @@ export async function GET(request: Request) {
         const response = await fetch(apiUrl, {
             headers: {
                 Authorization: `Bearer ${TOKEN}`,
+                ...(CLIENT_ID ? { "Client-ID": CLIENT_ID } : {}),
                 "Content-Type": "application/json",
             },
             // Re-validate every 10 minutes to avoid hammering the API

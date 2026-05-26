@@ -30,9 +30,15 @@ export async function GET(request: Request) {
                 Authorization: `Bearer ${TOKEN}`,
                 ...(CLIENT_ID ? { "Client-ID": CLIENT_ID } : {}),
                 "Content-Type": "application/json",
+                "Accept": "application/json",
+                // User-Agent is required to avoid Cloudflare bot challenges
+                // on Vercel serverless functions (datacenter IPs get flagged without one)
+                "User-Agent": "AnimeScheduleDashboard/1.0 (https://anime-schdule.vercel.app)",
+                "Accept-Language": "en-US,en;q=0.9",
             },
-            // Re-validate every 10 minutes to avoid hammering the API
-            next: { revalidate: 600 },
+            // Disable Next.js fetch cache — a cached Cloudflare challenge page
+            // would poison subsequent requests for the entire revalidation window
+            cache: "no-store",
         });
 
         if (!response.ok) {

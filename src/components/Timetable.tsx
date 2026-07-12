@@ -7,6 +7,7 @@ import { Loader2, AlertTriangle } from "lucide-react";
 import CalendarHeader from "./CalendarHeader";
 import AnimeCard from "./AnimeCard";
 import FilterBar from "./FilterBar";
+import NowIndicator from "./NowIndicator";
 import { useWatchlistStore } from "@/store/useWatchlistStore";
 import type {
     TimetableShow,
@@ -186,7 +187,7 @@ export default function Timetable() {
 
     useEffect(() => {
         setCurrentTime(new Date());
-        const interval = setInterval(() => setCurrentTime(new Date()), 60 * 60 * 1000); // 1hr checks
+        const interval = setInterval(() => setCurrentTime(new Date()), 60 * 1000); // 1min for now-indicator sync
         return () => clearInterval(interval);
     }, []);
 
@@ -475,9 +476,54 @@ export default function Timetable() {
                                     No shows
                                 </div>
                             ) : (
-                                day.shows.map((anime, index) => (
-                                    <AnimeCard key={`${anime.id}-${anime.airTime}-${anime.releaseType}-${index}`} anime={anime} />
-                                ))
+                                (() => {
+                                    // For today's column on the current week, insert the NowIndicator
+                                    // between already-aired and upcoming shows
+                                    const isCurrentWeekToday = day.isToday && weekOffset === 0;
+                                    if (!isCurrentWeekToday) {
+                                        return day.shows.map((anime, index) => (
+                                            <AnimeCard key={`${anime.id}-${anime.airTime}-${anime.releaseType}-${index}`} anime={anime} />
+                                        ));
+                                    }
+
+                                    const nowMs = now.getTime();
+                                    // Find the index of the first show that hasn't aired yet
+                                    const firstUpcomingIdx = day.shows.findIndex(
+                                        (s) => new Date(s.airTime).getTime() > nowMs
+                                    );
+
+                                    // All shows aired → put indicator at the end
+                                    // No shows aired → put indicator at the top
+                                    // Otherwise → insert between aired and upcoming
+                                    const insertIdx = firstUpcomingIdx === -1
+                                        ? day.shows.length
+                                        : firstUpcomingIdx;
+
+                                    const elements: React.ReactNode[] = [];
+                                    day.shows.forEach((anime, index) => {
+                                        if (index === insertIdx) {
+                                            elements.push(
+                                                <div key="now-indicator" className="col-span-full">
+                                                    <NowIndicator />
+                                                </div>
+                                            );
+                                        }
+                                        elements.push(
+                                            <AnimeCard key={`${anime.id}-${anime.airTime}-${anime.releaseType}-${index}`} anime={anime} />
+                                        );
+                                    });
+
+                                    // If indicator goes at the end (all shows aired)
+                                    if (insertIdx === day.shows.length) {
+                                        elements.push(
+                                            <div key="now-indicator" className="col-span-full">
+                                                <NowIndicator />
+                                            </div>
+                                        );
+                                    }
+
+                                    return elements;
+                                })()
                             )}
                         </div>
                     ))}

@@ -3,6 +3,7 @@
 import Image from "next/image";
 import { Bookmark, X } from "lucide-react";
 import { useWatchlistStore } from "@/store/useWatchlistStore";
+import Countdown from "./Countdown";
 import type { AnimeCardData } from "@/types/types";
 
 // ─────────────────────────────────────────────────────────
@@ -16,12 +17,14 @@ import type { AnimeCardData } from "@/types/types";
 
 interface AnimeCardProps {
     anime: AnimeCardData;
+    /** When true, show a live countdown timer next to the air time */
+    showCountdown?: boolean;
 }
 
 /** Base URL for AnimeSchedule CDN images */
 const CDN_BASE = "https://img.animeschedule.net/production/assets/public/img/";
 
-export default function AnimeCard({ anime }: AnimeCardProps) {
+export default function AnimeCard({ anime, showCountdown = false }: AnimeCardProps) {
     const { isWatching, toggleAnime, toggleHidden } = useWatchlistStore();
     const watched = isWatching(anime.id);
 
@@ -53,9 +56,12 @@ export default function AnimeCard({ anime }: AnimeCardProps) {
                     {anime.episodeNumber != null ? `Ep ${anime.episodeNumber}` : "—"}
                 </span>
 
-                {/* Air time in local timezone */}
-                <span className="font-bold text-center">
-                    {anime.localTime}
+                {/* Air time in local timezone + optional countdown */}
+                <span className="font-bold text-center flex flex-col items-center leading-tight">
+                    <span>{anime.localTime}</span>
+                    {showCountdown && (
+                        <Countdown airTime={anime.airTime} />
+                    )}
                 </span>
 
                 {/* Release type: SUB / DUB / RAW */}

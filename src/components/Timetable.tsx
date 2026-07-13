@@ -482,7 +482,7 @@ export default function Timetable() {
                                     const isCurrentWeekToday = day.isToday && weekOffset === 0;
                                     if (!isCurrentWeekToday) {
                                         return day.shows.map((anime, index) => (
-                                            <AnimeCard key={`${anime.id}-${anime.airTime}-${anime.releaseType}-${index}`} anime={anime} />
+                                            <AnimeCard key={`${anime.id}-${anime.airTime}-${anime.releaseType}-${index}`} anime={anime} showCountdown={false} />
                                         ));
                                     }
 
@@ -509,7 +509,7 @@ export default function Timetable() {
                                             );
                                         }
                                         elements.push(
-                                            <AnimeCard key={`${anime.id}-${anime.airTime}-${anime.releaseType}-${index}`} anime={anime} />
+                                            <AnimeCard key={`${anime.id}-${anime.airTime}-${anime.releaseType}-${index}`} anime={anime} showCountdown={true} />
                                         );
                                     });
 

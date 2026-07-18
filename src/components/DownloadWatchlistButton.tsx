@@ -7,6 +7,8 @@ export interface DownloadItem {
     query: string;
     expectedEpisode: number;
     originalTitle: string;
+    releaseType?: string;    // "SUB" | "DUB" | "RAW"
+    romajiTitle?: string;    // romaji title for Nyaa search
 }
 
 interface Props {

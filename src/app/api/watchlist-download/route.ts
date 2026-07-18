@@ -50,82 +50,118 @@ export function extractEpisodeNumber(title: string): number | null {
     return null;
 }
 
-// ─── Fuzzy title matching ─────────────────────────────────────────────────────
+// ─── Smart title keyword extraction ───────────────────────────────────────────
 
 /**
- * Normalises a string for comparison: lowercase, strip punctuation, collapse spaces.
+ * Common stop words that appear frequently in anime titles but aren't
+ * unique identifiers. We skip these when looking for "unique" words.
  */
-function normaliseTitle(title: string): string {
-    return title
-        .toLowerCase()
-        .replace(/[^\w\s]/g, " ")   // strip punctuation
+const STOP_WORDS = new Set([
+    "no", "wo", "wa", "ga", "ni", "de", "to", "na", "the", "a", "an",
+    "of", "in", "is", "it", "and", "or", "my", "i", "me", "he", "she",
+    "im", "its", "that", "this", "with", "for", "on", "at", "be",
+    "not", "but", "so", "if", "as", "by", "from", "are", "was", "were",
+    "been", "has", "have", "had", "do", "does", "did",
+]);
+
+/**
+ * Extracts unique searchable keywords from an anime title.
+ *
+ * Strategy: strip ALL non-alphanumeric characters, remove stop words,
+ * then pick 1-3 distinctive words that will yield good Nyaa results.
+ *
+ * Example:
+ *   "Heroine? Saint? No, I'm an All-Works Maid (And Proud of it)!"
+ *   → "works maid" (unique, specific words)
+ *
+ *   "Oshi no Ko" → "oshi ko" (skip "no" stop word)
+ *   "One Piece" → "one piece"
+ */
+function extractSearchKeywords(title: string): string {
+    // Strip everything that isn't alphanumeric or space
+    const cleaned = title
+        .replace(/[^a-zA-Z0-9\s]/g, " ")
         .replace(/\s+/g, " ")
         .trim();
-}
 
-/**
- * Tokenises a normalised title into a Set of words, filtering out very short
- * tokens (articles, particles) that add noise.
- */
-function tokenise(title: string): Set<string> {
-    const STOP = new Set(["no", "wo", "wa", "ga", "ni", "de", "to", "na", "the", "a", "an", "of", "in"]);
-    return new Set(
-        normaliseTitle(title)
-            .split(" ")
-            .filter((w) => w.length > 1 && !STOP.has(w))
+    const words = cleaned.split(" ").filter(
+        (w) => w.length > 1 && !STOP_WORDS.has(w.toLowerCase())
     );
+
+    if (words.length === 0) {
+        // Fallback: just use all words from cleaned title
+        return cleaned.split(" ").slice(0, 3).join(" ");
+    }
+
+    // For short titles (1-2 words after filtering), use all of them
+    if (words.length <= 2) return words.join(" ");
+
+    // For longer titles, score words by "uniqueness" (length + uncommonness)
+    // Prefer longer, less common words as they're more distinctive
+    const scored = words.map((w, idx) => ({
+        word: w,
+        score: w.length + (idx > 2 ? 1 : 0), // slight boost to later words (less generic)
+        originalIdx: idx,
+    }));
+
+    // Sort by score descending, take top 2
+    scored.sort((a, b) => b.score - a.score);
+    const selected = scored.slice(0, 2);
+
+    // Re-sort by original position so the query reads naturally
+    selected.sort((a, b) => a.originalIdx - b.originalIdx);
+
+    return selected.map((s) => s.word).join(" ");
 }
 
-/**
- * Jaccard similarity between two token sets: |intersection| / |union|.
- * Returns a value in [0, 1].
- */
-function jaccardSimilarity(a: Set<string>, b: Set<string>): number {
-    if (a.size === 0 && b.size === 0) return 1;
-    const intersection = [...a].filter((t) => b.has(t)).length;
-    const union = new Set([...a, ...b]).size;
-    return intersection / union;
-}
+// ─── Subtitle / audio validation ──────────────────────────────────────────────
+
+/** Known uploaders whose releases always include subtitles */
+const TRUSTED_SUB_UPLOADERS = ["subsplease", "erai-raws", "judas", "ember", "yameii"];
 
 /**
- * Extracts the "show title" portion from a typical Nyaa torrent filename by
- * stripping leading release-group tags and trailing metadata brackets/episode info.
+ * Checks if a torrent title indicates it has subtitles.
  *
- * "[SubsPlease] Okiraku Ryoushu no Tanoshii - 09 (1080p) [ABCD].mkv"
- *   → "Okiraku Ryoushu no Tanoshii"
+ * Matches: MultiSub, Multi-Subs, multi_sub, .srt, ASS, subtitle, subbed,
+ * or if the uploader is a known subbed release group.
  */
-function extractShowTitleFromTorrent(torrentTitle: string): string {
-    // Remove leading [GroupTag]
-    let t = torrentTitle.replace(/^\s*\[[^\]]*\]\s*/, "");
-    // Remove file extension
-    t = t.replace(/\.\w{2,4}$/, "");
-    // Cut at " - <digits>" (episode marker) — everything before is the show title
-    t = t.replace(/\s*[-–]\s*\d{1,4}(?:\s*v\d+)?\s*[\(\[].*$/, "");
-    // Cut at S01E / EP / Episode
-    t = t.replace(/\s+(?:[Ss]\d{1,2}[Ee]\d{1,4}|[Ee][Pp]\.?\d{1,4}|[Ee]pisode\s*\d{1,4}).*$/, "");
-    return t.trim();
+function hasSubs(torrentTitle: string): boolean {
+    const lower = torrentTitle.toLowerCase();
+
+    // Known subbed uploaders — their releases always have subs
+    for (const uploader of TRUSTED_SUB_UPLOADERS) {
+        if (lower.includes(`[${uploader}]`)) return true;
+    }
+
+    // Explicit subtitle indicators
+    const subPatterns = [
+        /multi[\s\-_]?sub/i,
+        /\bsub(?:s|bed|title)?\b/i,
+        /\bass\b/i,      // ASS subtitle format
+        /\.srt\b/i,
+        /\beng(?:lish)?\s*sub/i,
+    ];
+
+    return subPatterns.some((p) => p.test(torrentTitle));
 }
 
 /**
- * Returns true if the torrent title matches the full canonical anime name at
- * >= the given similarity threshold (default 0.35 ≈ 35%).
+ * Checks if a torrent title indicates dual audio or dub.
+ * Matches: Dual Audio, Dual.Audio, DualAudio, Dub, Dubbed
  */
-function titleMatchesFuzzy(
-    torrentTitle: string,
-    canonicalFullTitle: string,
-    threshold = 0.35
-): boolean {
-    const extractedShow = extractShowTitleFromTorrent(torrentTitle);
-    const showTokens = tokenise(extractedShow);
-    const canonicalTokens = tokenise(canonicalFullTitle);
-    const score = jaccardSimilarity(showTokens, canonicalTokens);
-
-    console.log(
-        `  fuzzy "${extractedShow}" vs "${canonicalFullTitle}" → ${(score * 100).toFixed(1)}%`
-    );
-
-    return score >= threshold;
+function isDualAudioOrDub(torrentTitle: string): boolean {
+    const lower = torrentTitle.toLowerCase();
+    return /dual[\s.\-_]?audio/i.test(lower) ||
+        /\bdub(?:bed)?\b/i.test(lower);
 }
+
+/**
+ * Checks if the torrent is from a specific uploader.
+ */
+function isFromUploader(torrentTitle: string, uploader: string): boolean {
+    return torrentTitle.toLowerCase().includes(`[${uploader.toLowerCase()}]`);
+}
+
 
 // ─── AnimeSchedule API ────────────────────────────────────────────────────────
 
@@ -139,11 +175,6 @@ interface AnimeScheduleEntry {
 
 /**
  * Searches AnimeSchedule for a show and returns the best-matching entry.
- * AnimeSchedule v3 private API requires an Authorization Bearer token.
- * Set ANIMESCHEDULE_TOKEN in your environment variables.
- *
- * Endpoint: GET /api/v3/anime?title=<query>&per-page=5
- * Returns: { anime: AnimeScheduleEntry[] }
  */
 async function fetchAnimeScheduleEntry(query: string): Promise<AnimeScheduleEntry | null> {
     try {
@@ -157,7 +188,6 @@ async function fetchAnimeScheduleEntry(query: string): Promise<AnimeScheduleEntr
 
         const data = await res.json();
 
-        // The API returns { anime: AnimeScheduleEntry[] } or a direct array
         const entries: AnimeScheduleEntry[] = Array.isArray(data)
             ? data
             : Array.isArray(data?.anime)
@@ -166,7 +196,6 @@ async function fetchAnimeScheduleEntry(query: string): Promise<AnimeScheduleEntr
 
         if (entries.length === 0) return null;
 
-        // Pick the best match: prefer exact title match first, then first result
         const normalised = query.toLowerCase().trim();
         const exact = entries.find(
             (e) =>
@@ -182,10 +211,7 @@ async function fetchAnimeScheduleEntry(query: string): Promise<AnimeScheduleEntr
 }
 
 /**
- * Fetches the full AnimeSchedule entry by its route slug to get accurate
- * episode airing info (episodeNumber = latest aired episode).
- *
- * Endpoint: GET /api/v3/anime/<route>
+ * Fetches the full AnimeSchedule entry by its route slug.
  */
 async function fetchAnimeScheduleDetail(route: string): Promise<AnimeScheduleEntry | null> {
     try {
@@ -244,60 +270,149 @@ async function searchNyaa(searchQuery: string): Promise<NyaaResult[]> {
     return results;
 }
 
+// ─── Core search strategy ─────────────────────────────────────────────────────
+
 /**
- * Core search strategy:
+ * Finds the best matching torrent on Nyaa.
  *
- * 1. Extract the FIRST WORD of the romaji title and search Nyaa with just that.
- * 2. For each result, extract the show-title portion and compare it against the
- *    full canonical anime name using Jaccard similarity (threshold ≥ 35%).
- * 3. Among matching results, keep only those whose embedded episode number
- *    equals `expectedEpisode`.
- * 4. Return the candidate with the highest seeder count.
+ * Search strategy:
+ *   1. Extract smart keywords from the title (handles long/symbolic titles)
+ *   2. Search Nyaa with keywords
+ *   3. Filter results by episode number
+ *   4. If preferDub=true, search for dual audio with "du" suffix first
+ *   5. Prefer [ToonsHub] uploader, then fall back to best seeds
+ *   6. Require subtitle indicators (unless from trusted uploaders)
  *
- * Falls back to the full query if the first-word search yields no fuzzy matches.
+ * @param romajiTitle     Romaji title from AnimeSchedule
+ * @param englishTitle    English title (used for keyword extraction)
+ * @param expectedEpisode The episode number to find
+ * @param preferDub       If true, prefer dual audio / dub versions
  */
 async function findBestTorrent(
-    romajiTitle: string,     // romaji title from AnimeSchedule (used for Nyaa search)
-    fullCanonicalTitle: string, // full title used for fuzzy matching
-    expectedEpisode: number
+    romajiTitle: string,
+    englishTitle: string,
+    expectedEpisode: number,
+    preferDub: boolean = false
 ): Promise<NyaaResult | null> {
 
-    async function searchAndFilter(query: string): Promise<NyaaResult[]> {
-        const results = await searchNyaa(query);
-        return results.filter(
-            (r) =>
-                titleMatchesFuzzy(r.title, fullCanonicalTitle) &&
-                extractEpisodeNumber(r.title) === expectedEpisode
-        );
+    /**
+     * Filters results to those matching the expected episode and having subs.
+     */
+    function filterByEpisodeAndSubs(results: NyaaResult[]): NyaaResult[] {
+        return results.filter((r) => {
+            const ep = extractEpisodeNumber(r.title);
+            if (ep !== expectedEpisode) return false;
+
+            // Must have subtitles (either explicit marker or trusted uploader)
+            if (!hasSubs(r.title)) return false;
+
+            return true;
+        });
     }
 
-    // ── Pass 1: search with only the first word of the romaji title ──────────
-    const firstWord = romajiTitle.split(/\s+/)[0];
-    console.log(`  [Pass 1] Searching Nyaa for first word: "${firstWord}"`);
-    let candidates = await searchAndFilter(firstWord);
+    /**
+     * Picks the best result from candidates:
+     *   1. Prefer [ToonsHub] uploader
+     *   2. Fall back to highest seeders
+     */
+    function pickBest(candidates: NyaaResult[]): NyaaResult | null {
+        if (candidates.length === 0) return null;
 
-    // ── Pass 2: fall back to full romaji title if needed ────────────────────
-    if (candidates.length === 0 && firstWord !== romajiTitle) {
-        await new Promise((r) => setTimeout(r, 500));
-        console.log(`  [Pass 2] Falling back to full romaji query: "${romajiTitle}"`);
-        candidates = await searchAndFilter(romajiTitle);
+        // Check for ToonsHub first
+        const toonshub = candidates.filter((r) => isFromUploader(r.title, "ToonsHub"));
+        if (toonshub.length > 0) {
+            toonshub.sort((a, b) => b.seeders - a.seeders);
+            console.log(`  ✓ Found [ToonsHub] release: "${toonshub[0].title}"`);
+            return toonshub[0];
+        }
+
+        // Fall back to highest seeders
+        candidates.sort((a, b) => b.seeders - a.seeders);
+        console.log(`  ✓ Best by seeders: "${candidates[0].title}" (${candidates[0].seeders} seeds)`);
+        return candidates[0];
     }
 
-    // ── Pass 3: fall back to the original user query if still nothing ────────
-    if (candidates.length === 0 && fullCanonicalTitle !== romajiTitle) {
-        await new Promise((r) => setTimeout(r, 500));
-        const altFirst = fullCanonicalTitle.split(/\s+/)[0];
-        if (altFirst !== firstWord) {
-            console.log(`  [Pass 3] Trying canonical title first word: "${altFirst}"`);
-            candidates = await searchAndFilter(altFirst);
+    // Build search queries from both romaji and english titles
+    const romajiKeywords = extractSearchKeywords(romajiTitle);
+    const englishKeywords = extractSearchKeywords(englishTitle);
+
+    console.log(`  Keywords: romaji="${romajiKeywords}" english="${englishKeywords}"`);
+
+    // ── If preferDub, try dual audio search first ─────────────────────────────
+    if (preferDub) {
+        // Search with "du" suffix for dual audio / dub results
+        const dubQueries = [
+            `${romajiKeywords} du`,
+            romajiKeywords !== englishKeywords ? `${englishKeywords} du` : null,
+        ].filter(Boolean) as string[];
+
+        for (const q of dubQueries) {
+            console.log(`  [DUB Pass] Searching: "${q}"`);
+            const results = await searchNyaa(q);
+            const dubResults = filterByEpisodeAndSubs(results).filter((r) =>
+                isDualAudioOrDub(r.title)
+            );
+            const best = pickBest(dubResults);
+            if (best) return best;
+            await new Promise((r) => setTimeout(r, 300));
         }
     }
 
-    if (candidates.length === 0) return null;
+    // ── Pass 1: search with romaji keywords ──────────────────────────────────
+    console.log(`  [Pass 1] Searching: "${romajiKeywords}"`);
+    let results = await searchNyaa(romajiKeywords);
+    let candidates = filterByEpisodeAndSubs(results);
+    let best = pickBest(candidates);
+    if (best) return best;
 
-    // Pick the candidate with the most seeders
-    candidates.sort((a, b) => b.seeders - a.seeders);
-    return candidates[0];
+    // ── Pass 2: search with english keywords (if different) ──────────────────
+    if (englishKeywords.toLowerCase() !== romajiKeywords.toLowerCase()) {
+        await new Promise((r) => setTimeout(r, 300));
+        console.log(`  [Pass 2] Searching: "${englishKeywords}"`);
+        results = await searchNyaa(englishKeywords);
+        candidates = filterByEpisodeAndSubs(results);
+        best = pickBest(candidates);
+        if (best) return best;
+    }
+
+    // ── Pass 3: try first word of romaji (broader search) ────────────────────
+    const firstWord = romajiTitle.split(/\s+/)[0]?.replace(/[^a-zA-Z0-9]/g, "");
+    if (firstWord && firstWord.toLowerCase() !== romajiKeywords.toLowerCase()) {
+        await new Promise((r) => setTimeout(r, 300));
+        console.log(`  [Pass 3] Broader search with first word: "${firstWord}"`);
+        results = await searchNyaa(firstWord);
+        candidates = filterByEpisodeAndSubs(results);
+        best = pickBest(candidates);
+        if (best) return best;
+    }
+
+    // ── Pass 4: try full romaji title (most specific) ────────────────────────
+    const cleanRomaji = romajiTitle.replace(/[^a-zA-Z0-9\s]/g, " ").replace(/\s+/g, " ").trim();
+    if (cleanRomaji.toLowerCase() !== romajiKeywords.toLowerCase()) {
+        await new Promise((r) => setTimeout(r, 300));
+        console.log(`  [Pass 4] Full romaji: "${cleanRomaji}"`);
+        results = await searchNyaa(cleanRomaji);
+        candidates = filterByEpisodeAndSubs(results);
+        best = pickBest(candidates);
+        if (best) return best;
+    }
+
+    // ── Pass 5: relax sub requirement — allow any result with seeds ──────────
+    console.log(`  [Pass 5] Relaxing subtitle requirement...`);
+    for (const q of [romajiKeywords, englishKeywords]) {
+        await new Promise((r) => setTimeout(r, 300));
+        results = await searchNyaa(q);
+        candidates = results.filter((r) => {
+            const ep = extractEpisodeNumber(r.title);
+            return ep === expectedEpisode && r.seeders > 0;
+        });
+        // Still prefer ToonsHub even without sub markers
+        best = pickBest(candidates);
+        if (best) return best;
+    }
+
+    console.warn(`  ✗ No results found after all passes`);
+    return null;
 }
 
 // ─── Route handler ────────────────────────────────────────────────────────────
@@ -313,32 +428,47 @@ export async function POST(req: Request) {
         const zip = new JSZip();
         let foundCount = 0;
 
-        for (const item of items) {
-            const { query, expectedEpisode, originalTitle } = item as {
-                query: string;
-                expectedEpisode: number;
-                originalTitle: string;
-            };
+        // ── Group items by title to detect same-day sub+dub ──────────────────
+        // If both SUB and DUB exist for the same episode, prefer DUB
+        interface DownloadItem {
+            query: string;
+            expectedEpisode: number;
+            originalTitle: string;
+            releaseType?: string;  // "SUB" | "DUB" | "RAW"
+            romajiTitle?: string;
+        }
+
+        const typedItems = items as DownloadItem[];
+
+        // Deduplicate: if both SUB and DUB exist for same title+episode, keep DUB
+        const deduped = new Map<string, DownloadItem>();
+        for (const item of typedItems) {
+            const key = `${item.originalTitle}::${item.expectedEpisode}`;
+            const existing = deduped.get(key);
+
+            if (!existing) {
+                deduped.set(key, item);
+            } else if (item.releaseType === "DUB") {
+                // DUB takes priority over SUB for same episode
+                console.log(`  [Dedup] Preferring DUB over ${existing.releaseType} for: ${item.originalTitle} ep ${item.expectedEpisode}`);
+                deduped.set(key, item);
+            }
+        }
+
+        for (const item of deduped.values()) {
+            const { query, expectedEpisode, originalTitle, releaseType, romajiTitle } = item;
 
             try {
                 // ── 1. Resolve romaji title + latest episode from AnimeSchedule ──
                 const scheduleEntry = await fetchAnimeScheduleEntry(query);
 
-                // Romaji title for Nyaa search; fall back to the user's query
-                const romajiTitle: string = scheduleEntry?.title ?? query;
-
-                // Full canonical name used for fuzzy matching;
-                // prefer the longer of scheduleEntry.title vs originalTitle
-                const canonicalTitle: string =
-                    scheduleEntry?.title && scheduleEntry.title.length >= originalTitle.length
-                        ? scheduleEntry.title
-                        : originalTitle;
+                const resolvedRomaji: string = romajiTitle || scheduleEntry?.title || query;
+                const resolvedEnglish: string = originalTitle || scheduleEntry?.englishTitle || query;
 
                 // Fetch full detail to get the latest aired episode number
                 let latestAiredEpisode: number | null = null;
                 if (scheduleEntry?.route) {
                     const detail = await fetchAnimeScheduleDetail(scheduleEntry.route);
-                    // AnimeSchedule stores the latest AIRED episode in episodeNumber
                     latestAiredEpisode = detail?.episodeNumber ?? null;
                 }
 
@@ -351,16 +481,24 @@ export async function POST(req: Request) {
                     continue;
                 }
 
+                const preferDub = releaseType === "DUB";
+
                 console.log(
-                    `[${originalTitle}] romaji="${romajiTitle}" canonical="${canonicalTitle}" ` +
-                    `ep=${expectedEpisode} latestAired=${latestAiredEpisode ?? "unknown"}`
+                    `\n[${originalTitle}] romaji="${resolvedRomaji}" ` +
+                    `ep=${expectedEpisode} latestAired=${latestAiredEpisode ?? "unknown"} ` +
+                    `preferDub=${preferDub}`
                 );
 
                 // ── 2. Find the best matching torrent on Nyaa ─────────────────
-                const best = await findBestTorrent(romajiTitle, canonicalTitle, expectedEpisode);
+                const best = await findBestTorrent(
+                    resolvedRomaji,
+                    resolvedEnglish,
+                    expectedEpisode,
+                    preferDub
+                );
 
                 if (!best) {
-                    console.warn(`No matching torrent found for: ${originalTitle} ep ${expectedEpisode}`);
+                    console.warn(`✗ No matching torrent found for: ${originalTitle} ep ${expectedEpisode}`);
                     continue;
                 }
 

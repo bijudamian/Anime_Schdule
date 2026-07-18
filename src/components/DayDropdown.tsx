@@ -25,7 +25,9 @@ export default function DayDropdown({ shows, watchlist, allRomajiTitles }: Props
             return {
                 query: generateUniqueAbbreviation(romaji, allRomajiTitles),
                 expectedEpisode: show.episodeNumber || 1,
-                originalTitle: show.english || show.title || show.romaji || "Unknown Title"
+                originalTitle: show.english || show.title || show.romaji || "Unknown Title",
+                releaseType: show.releaseType,
+                romajiTitle: show.romaji || undefined,
             };
         });
 

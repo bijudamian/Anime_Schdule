@@ -78,8 +78,9 @@ const STOP_WORDS = new Set([
  *   "One Piece" → "one piece"
  */
 function extractSearchKeywords(title: string): string {
-    // Strip everything that isn't alphanumeric or space
+    // Strip possessive 's before general cleanup ("Ogre's" → "Ogre")
     const cleaned = title
+        .replace(/'s\b/gi, "")
         .replace(/[^a-zA-Z0-9\s]/g, " ")
         .replace(/\s+/g, " ")
         .trim();

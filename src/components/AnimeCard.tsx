@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { Bookmark, X } from "lucide-react";
+import { Bookmark, X, Eye } from "lucide-react";
 import { useWatchlistStore } from "@/store/useWatchlistStore";
 import Countdown from "./Countdown";
 import type { AnimeCardData } from "@/types/types";
@@ -9,34 +9,51 @@ import type { AnimeCardData } from "@/types/types";
 // ─────────────────────────────────────────────────────────
 // AnimeCard — individual anime entry in a timetable column
 //
-// Behavior:
-//   • Click anywhere on the tile → toggles bookmark
-//   • Hover → shows bookmark + hide (X) overlay buttons
-//   • Both buttons on the overlay also work independently
+// Behavior depends on viewMode:
+//   "all"       → Click tile toggles watchlist bookmark
+//   "watchlist" → Click tile toggles "actually watching",
+//                 hover bookmark button unbookmarks
+//   "watching"  → Click tile removes from actually watching
 // ─────────────────────────────────────────────────────────
+
+type ViewMode = "all" | "watchlist" | "watching";
 
 interface AnimeCardProps {
     anime: AnimeCardData;
     /** When true, show a live countdown timer next to the air time */
     showCountdown?: boolean;
+    /** Controls click behavior based on which tab we're on */
+    viewMode?: ViewMode;
 }
 
 /** Base URL for AnimeSchedule CDN images */
 const CDN_BASE = "https://img.animeschedule.net/production/assets/public/img/";
 
-export default function AnimeCard({ anime, showCountdown = false }: AnimeCardProps) {
-    const { isWatching, toggleAnime, toggleHidden } = useWatchlistStore();
+export default function AnimeCard({ anime, showCountdown = false, viewMode = "all" }: AnimeCardProps) {
+    const { isWatching, toggleAnime, toggleHidden, isActuallyWatching, toggleActuallyWatching } = useWatchlistStore();
     const watched = isWatching(anime.id);
+    const actuallyWatching = isActuallyWatching(anime.id);
 
     const imageUrl = anime.imageUrl
         ? `${CDN_BASE}${anime.imageUrl}`
         : "/placeholder.png";
 
+    // Tile click behavior based on viewMode
+    const handleTileClick = () => {
+        if (viewMode === "all") {
+            toggleAnime(anime.id);
+        } else if (viewMode === "watchlist") {
+            toggleActuallyWatching(anime.id);
+        } else if (viewMode === "watching") {
+            toggleActuallyWatching(anime.id);
+        }
+    };
+
     return (
         <div
             className="group relative w-full overflow-hidden rounded-sm cursor-pointer"
             style={{ aspectRatio: "3/4" }}
-            onClick={() => toggleAnime(anime.id)}
+            onClick={handleTileClick}
         >
             {/* ── Background Cover Image ── */}
             <Image
@@ -96,44 +113,106 @@ export default function AnimeCard({ anime, showCountdown = false }: AnimeCardPro
                 </p>
             </div>
 
-            {/* ── Hover: Bookmark + Hide Overlay ── */}
+            {/* ── Hover Overlay ── */}
             <div
                 className="absolute inset-0 z-20 flex items-center justify-center gap-4 bg-black/40 opacity-0 transition-opacity duration-200 group-hover:opacity-100"
             >
-                {/* Bookmark button */}
-                <button
-                    onClick={(e) => {
-                        e.stopPropagation();
-                        toggleAnime(anime.id);
-                    }}
-                    className="flex items-center justify-center rounded-full bg-black/30 p-2 transition-transform duration-150 hover:scale-110 hover:bg-black/50"
-                    title={watched ? "Remove from watchlist" : "Add to watchlist"}
-                >
-                    <Bookmark
-                        className={`h-7 w-7 ${watched
-                            ? "fill-brand-blue text-brand-blue"
-                            : "fill-none text-white"
-                            }`}
-                    />
-                </button>
+                {viewMode === "all" && (
+                    <>
+                        {/* Bookmark button */}
+                        <button
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                toggleAnime(anime.id);
+                            }}
+                            className="flex items-center justify-center rounded-full bg-black/30 p-2 transition-transform duration-150 hover:scale-110 hover:bg-black/50"
+                            title={watched ? "Remove from watchlist" : "Add to watchlist"}
+                        >
+                            <Bookmark
+                                className={`h-7 w-7 ${watched
+                                    ? "fill-brand-blue text-brand-blue"
+                                    : "fill-none text-white"
+                                    }`}
+                            />
+                        </button>
 
-                {/* Hide button */}
-                <button
-                    onClick={(e) => {
-                        e.stopPropagation();
-                        toggleHidden(anime.id);
-                    }}
-                    className="flex items-center justify-center rounded-full bg-black/30 p-2 transition-transform duration-150 hover:scale-110 hover:bg-red-900/50"
-                    title="Hide from dashboard"
-                >
-                    <X className="h-7 w-7 text-red-400" />
-                </button>
+                        {/* Hide button */}
+                        <button
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                toggleHidden(anime.id);
+                            }}
+                            className="flex items-center justify-center rounded-full bg-black/30 p-2 transition-transform duration-150 hover:scale-110 hover:bg-red-900/50"
+                            title="Hide from dashboard"
+                        >
+                            <X className="h-7 w-7 text-red-400" />
+                        </button>
+                    </>
+                )}
+
+                {viewMode === "watchlist" && (
+                    <>
+                        {/* Unbookmark button (removes from watchlist) */}
+                        <button
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                // Also remove from actually watching if unbookmarking
+                                if (actuallyWatching) toggleActuallyWatching(anime.id);
+                                toggleAnime(anime.id);
+                            }}
+                            className="flex items-center justify-center rounded-full bg-black/30 p-2 transition-transform duration-150 hover:scale-110 hover:bg-black/50"
+                            title="Remove from watchlist"
+                        >
+                            <Bookmark className="h-7 w-7 fill-brand-blue text-brand-blue" />
+                        </button>
+
+                        {/* Actually Watching toggle */}
+                        <button
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                toggleActuallyWatching(anime.id);
+                            }}
+                            className="flex items-center justify-center rounded-full bg-black/30 p-2 transition-transform duration-150 hover:scale-110 hover:bg-black/50"
+                            title={actuallyWatching ? "Remove from Actually Watching" : "Add to Actually Watching"}
+                        >
+                            <Eye
+                                className={`h-7 w-7 ${actuallyWatching
+                                    ? "text-emerald-400"
+                                    : "text-white"
+                                    }`}
+                            />
+                        </button>
+                    </>
+                )}
+
+                {viewMode === "watching" && (
+                    <>
+                        {/* Remove from actually watching */}
+                        <button
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                toggleActuallyWatching(anime.id);
+                            }}
+                            className="flex items-center justify-center rounded-full bg-black/30 p-2 transition-transform duration-150 hover:scale-110 hover:bg-black/50"
+                            title="Remove from Actually Watching"
+                        >
+                            <Eye className="h-7 w-7 text-emerald-400" />
+                        </button>
+                    </>
+                )}
             </div>
 
-            {/* ── Persistent bookmark indicator (when watched) ── */}
-            {watched && (
+            {/* ── Persistent bookmark indicator (when in watchlist) ── */}
+            {watched && viewMode === "all" && (
                 <div className="absolute top-[26px] right-1 z-20 pointer-events-none">
                     <Bookmark className="h-4 w-4 fill-brand-blue text-brand-blue drop-shadow" />
+                </div>
+            )}
+
+            {/* ── Persistent "actually watching" indicator (in watchlist view) ── */}
+            {actuallyWatching && viewMode === "watchlist" && (
+                <div className="absolute top-[26px] right-1 z-20 pointer-events-none">
+                    <Eye className="h-4 w-4 text-emerald-400 drop-shadow" />
                 </div>
             )}
         </div>

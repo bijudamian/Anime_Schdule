@@ -25,6 +25,18 @@ interface WatchlistState {
     /** Clear the entire watchlist */
     clearAll: () => void;
 
+    /** Array of anime route IDs the user is actually watching (subset of watchlist) */
+    actuallyWatching: string[];
+
+    /** Toggle an anime in/out of actually watching */
+    toggleActuallyWatching: (id: string) => void;
+
+    /** Check if an anime is in actually watching */
+    isActuallyWatching: (id: string) => boolean;
+
+    /** Clear the actually watching list */
+    clearActuallyWatching: () => void;
+
     /** Array of anime route IDs the user has hidden from the dashboard */
     hiddenAnime: string[];
 
@@ -63,6 +75,7 @@ export const useWatchlistStore = create<WatchlistState>()(
     persist(
         (set, get) => ({
             watchlist: [],
+            actuallyWatching: [],
             hiddenAnime: [],
             savedFilters: null,
             savedFilterPresets: [null, null] as FilterPresets,
@@ -81,7 +94,24 @@ export const useWatchlistStore = create<WatchlistState>()(
             },
 
             clearAll: () => {
-                set({ watchlist: [] });
+                set({ watchlist: [], actuallyWatching: [] });
+            },
+
+            toggleActuallyWatching: (id: string) => {
+                const current = get().actuallyWatching;
+                if (current.includes(id)) {
+                    set({ actuallyWatching: current.filter((item) => item !== id) });
+                } else {
+                    set({ actuallyWatching: [...current, id] });
+                }
+            },
+
+            isActuallyWatching: (id: string) => {
+                return get().actuallyWatching.includes(id);
+            },
+
+            clearActuallyWatching: () => {
+                set({ actuallyWatching: [] });
             },
 
             toggleHidden: (id: string) => {
@@ -133,13 +163,19 @@ export const useWatchlistStore = create<WatchlistState>()(
         {
             name: "anime-watchlist", // localStorage key
             storage: createJSONStorage(() => localStorage),
-            version: 1,
+            version: 2,
             migrate: (persisted: unknown, version: number) => {
                 const state = persisted as Record<string, unknown>;
                 if (version === 0 || !state.savedFilterPresets) {
                     // Migrate old single savedFilters into slot 0
                     const legacy = state.savedFilters as FilterState | null;
                     state.savedFilterPresets = [legacy || null, null];
+                }
+                if (version < 2) {
+                    // Add actuallyWatching if missing
+                    if (!state.actuallyWatching) {
+                        state.actuallyWatching = [];
+                    }
                 }
                 return state as unknown as WatchlistState;
             },

@@ -180,7 +180,7 @@ async function fetchSchedule(weekOffset: number): Promise<TimetableShow[]> {
 }
 
 export default function Timetable() {
-    const { watchlist, hiddenAnime, unhideAnime, clearHidden, savedFilterPresets } = useWatchlistStore();
+    const { watchlist, actuallyWatching, hiddenAnime, unhideAnime, clearHidden, savedFilterPresets } = useWatchlistStore();
 
     // Use state to force the client date to hydrate perfectly and roll over at midnight
     const [currentTime, setCurrentTime] = useState<Date | null>(null);
@@ -193,6 +193,7 @@ export default function Timetable() {
 
     const [filters, setFilters] = useState<FilterState>({
         showWatchlistOnly: false,
+        showActuallyWatching: false,
         noDonghua: false,
         tvOnly: false,
         onaOnly: false,
@@ -275,6 +276,9 @@ export default function Timetable() {
         if (filters.showWatchlistOnly) {
             normalized = normalized.filter((s) => watchlist.includes(s.id));
         }
+        if (filters.showActuallyWatching) {
+            normalized = normalized.filter((s) => actuallyWatching.includes(s.id));
+        }
         if (filters.noDonghua) {
             normalized = normalized.filter((s) => !s.donghua);
         }
@@ -300,7 +304,7 @@ export default function Timetable() {
         }
 
         return buildWeekSchedule(normalized, now, weekOffset, selectedDayIndex);
-    }, [data, filters, watchlist, hiddenAnime, currentTime, weekOffset, selectedDayIndex]);
+    }, [data, filters, watchlist, actuallyWatching, hiddenAnime, currentTime, weekOffset, selectedDayIndex]);
 
     // Build a deduplicated list of hidden anime with titles for the FilterBar bubble
     // Groups multiple route IDs (e.g. SUB + DUB) under a single title
@@ -338,6 +342,7 @@ export default function Timetable() {
                 onToggleFilter={toggleFilter}
                 onSetFilters={(f) => setFilters(f)}
                 watchlistCount={watchlist.length}
+                actuallyWatchingCount={actuallyWatching.length}
                 watchlistTitles={watchlistTitles}
                 hiddenAnimeData={hiddenAnimeData}
                 onUnhideAnime={(id) => {
@@ -457,7 +462,15 @@ export default function Timetable() {
             {/* ── Timetable Grid (7 columns desktop, 1 column mobile) ── */}
             {!isLoading && !isError && (
                 <div className="grid grid-cols-1 md:grid-cols-7 gap-px" style={{ backgroundColor: "#333" }}>
-                    {weekSchedule.map((day) => (
+                    {(() => {
+                        // Determine viewMode based on active tab
+                        const viewMode = filters.showActuallyWatching
+                            ? "watching" as const
+                            : filters.showWatchlistOnly
+                                ? "watchlist" as const
+                                : "all" as const;
+
+                        return weekSchedule.map((day) => (
                         <div
                             key={day.dayIndex}
                             className={
@@ -482,7 +495,7 @@ export default function Timetable() {
                                     const isCurrentWeekToday = day.isToday && weekOffset === 0;
                                     if (!isCurrentWeekToday) {
                                         return day.shows.map((anime, index) => (
-                                            <AnimeCard key={`${anime.id}-${anime.airTime}-${anime.releaseType}-${index}`} anime={anime} showCountdown={false} />
+                                            <AnimeCard key={`${anime.id}-${anime.airTime}-${anime.releaseType}-${index}`} anime={anime} showCountdown={false} viewMode={viewMode} />
                                         ));
                                     }
 
@@ -509,7 +522,7 @@ export default function Timetable() {
                                             );
                                         }
                                         elements.push(
-                                            <AnimeCard key={`${anime.id}-${anime.airTime}-${anime.releaseType}-${index}`} anime={anime} showCountdown={true} />
+                                            <AnimeCard key={`${anime.id}-${anime.airTime}-${anime.releaseType}-${index}`} anime={anime} showCountdown={true} viewMode={viewMode} />
                                         );
                                     });
 
@@ -526,7 +539,8 @@ export default function Timetable() {
                                 })()
                             )}
                         </div>
-                    ))}
+                    ));
+                    })()}
                 </div>
             )}
 

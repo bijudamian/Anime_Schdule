@@ -25,6 +25,7 @@ interface FilterBarProps {
     onToggleFilter: (key: keyof FilterState) => void;
     onSetFilters: (filters: FilterState) => void;
     watchlistCount: number;
+    actuallyWatchingCount: number;
     watchlistTitles: string[];
     rightContent?: React.ReactNode;
     hiddenAnimeData?: HiddenAnimeItem[];
@@ -64,13 +65,14 @@ function PillButton({
 
 /** Check if any non-default filter is active */
 function hasActiveFilters(f: FilterState): boolean {
-    return f.noDonghua || f.tvOnly || f.onaOnly || f.subOnly || f.dubOnly || f.showWatchlistOnly;
+    return f.noDonghua || f.tvOnly || f.onaOnly || f.subOnly || f.dubOnly || f.showWatchlistOnly || f.showActuallyWatching;
 }
 
 /** Check if two filter states are identical */
 function filtersMatch(a: FilterState, b: FilterState): boolean {
     return (
         a.showWatchlistOnly === b.showWatchlistOnly &&
+        a.showActuallyWatching === b.showActuallyWatching &&
         a.noDonghua === b.noDonghua &&
         a.tvOnly === b.tvOnly &&
         a.onaOnly === b.onaOnly &&
@@ -203,6 +205,7 @@ export default function FilterBar({
     onToggleFilter,
     onSetFilters,
     watchlistCount,
+    actuallyWatchingCount,
     watchlistTitles,
     rightContent,
     hiddenAnimeData = [],
@@ -247,11 +250,13 @@ export default function FilterBar({
                         <span>Filters</span>
                     </div>
 
-                    {/* All Anime / My Watchlist toggle */}
+                    {/* All Anime / My Watchlist / Actually Watching toggle */}
                     <PillButton
-                        active={!filters.showWatchlistOnly}
+                        active={!filters.showWatchlistOnly && !filters.showActuallyWatching}
                         onClick={() => {
-                            if (filters.showWatchlistOnly) onToggleFilter("showWatchlistOnly");
+                            if (filters.showWatchlistOnly || filters.showActuallyWatching) {
+                                onSetFilters({ ...filters, showWatchlistOnly: false, showActuallyWatching: false });
+                            }
                         }}
                         primary
                     >
@@ -262,7 +267,9 @@ export default function FilterBar({
                     <PillButton
                         active={filters.showWatchlistOnly}
                         onClick={() => {
-                            if (!filters.showWatchlistOnly) onToggleFilter("showWatchlistOnly");
+                            if (!filters.showWatchlistOnly) {
+                                onSetFilters({ ...filters, showWatchlistOnly: true, showActuallyWatching: false });
+                            }
                         }}
                         primary
                     >
@@ -270,6 +277,23 @@ export default function FilterBar({
                         {watchlistCount > 0 && (
                             <span className="ml-1 rounded-full bg-white/20 px-1.5 py-0.5 text-[10px]">
                                 {watchlistCount}
+                            </span>
+                        )}
+                    </PillButton>
+
+                    <PillButton
+                        active={filters.showActuallyWatching}
+                        onClick={() => {
+                            if (!filters.showActuallyWatching) {
+                                onSetFilters({ ...filters, showWatchlistOnly: false, showActuallyWatching: true });
+                            }
+                        }}
+                        primary
+                    >
+                        Actually Watching
+                        {actuallyWatchingCount > 0 && (
+                            <span className="ml-1 rounded-full bg-white/20 px-1.5 py-0.5 text-[10px]">
+                                {actuallyWatchingCount}
                             </span>
                         )}
                     </PillButton>

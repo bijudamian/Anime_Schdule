@@ -76,6 +76,7 @@ export interface DaySchedule {
 /** Filter state for the timetable view */
 export interface FilterState {
     showWatchlistOnly: boolean;
+    showActuallyWatching: boolean;
     noDonghua: boolean;
     tvOnly: boolean;
     onaOnly: boolean;

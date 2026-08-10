@@ -1,9 +1,11 @@
 "use client";
 
+import { useState, useCallback } from "react";
 import Image from "next/image";
 import { Bookmark, X, Eye } from "lucide-react";
 import { useWatchlistStore } from "@/store/useWatchlistStore";
 import Countdown from "./Countdown";
+import AnimeContextMenu from "./AnimeContextMenu";
 import type { AnimeCardData } from "@/types/types";
 
 // ─────────────────────────────────────────────────────────
@@ -14,6 +16,8 @@ import type { AnimeCardData } from "@/types/types";
 //   "watchlist" → Click tile toggles "actually watching",
 //                 hover bookmark button unbookmarks
 //   "watching"  → Click tile removes from actually watching
+//
+// Right-click → Custom context menu with "Download All Prev Episodes"
 // ─────────────────────────────────────────────────────────
 
 type ViewMode = "all" | "watchlist" | "watching";
@@ -34,6 +38,9 @@ export default function AnimeCard({ anime, showCountdown = false, viewMode = "al
     const watched = isWatching(anime.id);
     const actuallyWatching = isActuallyWatching(anime.id);
 
+    // Context menu state
+    const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
+
     const imageUrl = anime.imageUrl
         ? `${CDN_BASE}${anime.imageUrl}`
         : "/placeholder.png";
@@ -49,172 +56,198 @@ export default function AnimeCard({ anime, showCountdown = false, viewMode = "al
         }
     };
 
+    // Right-click → show context menu
+    const handleContextMenu = useCallback((e: React.MouseEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setContextMenu({ x: e.clientX, y: e.clientY });
+    }, []);
+
     return (
-        <div
-            className="group relative w-full overflow-hidden rounded-sm cursor-pointer"
-            style={{ aspectRatio: "3/4" }}
-            onClick={handleTileClick}
-        >
-            {/* ── Background Cover Image ── */}
-            <Image
-                src={imageUrl}
-                alt={anime.title}
-                fill
-                className="object-cover"
-                sizes="(max-width: 768px) 50vw, 14vw"
-                unoptimized
-            />
-
-            {/* ── Top Info Bar ── */}
-            <div className="absolute top-0 left-0 right-0 z-10 flex items-center justify-between px-2 py-1 text-xs font-medium text-white"
-                style={{ backgroundColor: "rgba(0, 0, 0, 0.75)" }}>
-                {/* Episode number */}
-                <span className="whitespace-nowrap">
-                    {anime.episodeNumber != null ? `Ep ${anime.episodeNumber}` : "—"}
-                </span>
-
-                {/* Air time in local timezone + optional countdown */}
-                <span className="font-bold text-center flex flex-col items-center leading-tight">
-                    <span>{anime.localTime}</span>
-                    {showCountdown && (
-                        <Countdown airTime={anime.airTime} />
-                    )}
-                </span>
-
-                {/* Release type: SUB / DUB / RAW */}
-                <span className="rounded px-1 py-0.5 text-[10px] font-semibold uppercase"
-                    style={{
-                        backgroundColor:
-                            anime.releaseType === "SUB"
-                                ? "rgba(58, 117, 196, 0.6)"
-                                : anime.releaseType === "DUB"
-                                    ? "rgba(76, 175, 80, 0.6)"
-                                    : "rgba(100, 100, 100, 0.6)",
-                    }}>
-                    {anime.releaseType}
-                </span>
-            </div>
-
-            {/* ── Delayed / Hiatus Status Bar ── */}
-            {(anime.isDelayed || anime.isHiatus) && (
-                <div className="absolute top-[26px] left-0 right-0 z-10 py-0.5 text-center text-[10px] font-bold"
-                    style={{ backgroundColor: "#f0c040", color: "#222" }}>
-                    {anime.isHiatus ? "HIATUS" : "DELAYED"}
-                </div>
-            )}
-
-            {/* ── Bottom Gradient + Title ── */}
-            <div className="absolute bottom-0 left-0 right-0 z-10 px-2 pb-2 pt-8"
-                style={{
-                    background: "linear-gradient(to top, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0.5) 50%, transparent 100%)",
-                }}>
-                <p className="line-clamp-2 text-[11px] font-medium leading-tight text-white drop-shadow-md">
-                    {anime.title}
-                </p>
-            </div>
-
-            {/* ── Hover Overlay ── */}
+        <>
             <div
-                className="absolute inset-0 z-20 flex items-center justify-center gap-4 bg-black/40 opacity-0 transition-opacity duration-200 group-hover:opacity-100"
+                className="group relative w-full overflow-hidden rounded-sm cursor-pointer"
+                style={{ aspectRatio: "3/4" }}
+                onClick={handleTileClick}
+                onContextMenu={handleContextMenu}
             >
-                {viewMode === "all" && (
-                    <>
-                        {/* Bookmark button */}
-                        <button
-                            onClick={(e) => {
-                                e.stopPropagation();
-                                toggleAnime(anime.id);
-                            }}
-                            className="flex items-center justify-center rounded-full bg-black/30 p-2 transition-transform duration-150 hover:scale-110 hover:bg-black/50"
-                            title={watched ? "Remove from watchlist" : "Add to watchlist"}
-                        >
-                            <Bookmark
-                                className={`h-7 w-7 ${watched
-                                    ? "fill-brand-blue text-brand-blue"
-                                    : "fill-none text-white"
-                                    }`}
-                            />
-                        </button>
+                {/* ── Background Cover Image ── */}
+                <Image
+                    src={imageUrl}
+                    alt={anime.title}
+                    fill
+                    className="object-cover"
+                    sizes="(max-width: 768px) 50vw, 14vw"
+                    unoptimized
+                />
 
-                        {/* Hide button */}
-                        <button
-                            onClick={(e) => {
-                                e.stopPropagation();
-                                toggleHidden(anime.id);
-                            }}
-                            className="flex items-center justify-center rounded-full bg-black/30 p-2 transition-transform duration-150 hover:scale-110 hover:bg-red-900/50"
-                            title="Hide from dashboard"
-                        >
-                            <X className="h-7 w-7 text-red-400" />
-                        </button>
-                    </>
+                {/* ── Top Info Bar ── */}
+                <div className="absolute top-0 left-0 right-0 z-10 flex items-center justify-between px-2 py-1 text-xs font-medium text-white"
+                    style={{ backgroundColor: "rgba(0, 0, 0, 0.75)" }}>
+                    {/* Episode number */}
+                    <span className="whitespace-nowrap">
+                        {anime.episodeNumber != null ? `Ep ${anime.episodeNumber}` : "—"}
+                    </span>
+
+                    {/* Air time in local timezone + optional countdown */}
+                    <span className="font-bold text-center flex flex-col items-center leading-tight">
+                        <span>{anime.localTime}</span>
+                        {showCountdown && (
+                            <Countdown airTime={anime.airTime} />
+                        )}
+                    </span>
+
+                    {/* Release type: SUB / DUB / RAW */}
+                    <span className="rounded px-1 py-0.5 text-[10px] font-semibold uppercase"
+                        style={{
+                            backgroundColor:
+                                anime.releaseType === "SUB"
+                                    ? "rgba(58, 117, 196, 0.6)"
+                                    : anime.releaseType === "DUB"
+                                        ? "rgba(76, 175, 80, 0.6)"
+                                        : "rgba(100, 100, 100, 0.6)",
+                        }}>
+                        {anime.releaseType}
+                    </span>
+                </div>
+
+                {/* ── Delayed / Hiatus Status Bar ── */}
+                {(anime.isDelayed || anime.isHiatus) && (
+                    <div className="absolute top-[26px] left-0 right-0 z-10 py-0.5 text-center text-[10px] font-bold"
+                        style={{ backgroundColor: "#f0c040", color: "#222" }}>
+                        {anime.isHiatus ? "HIATUS" : "DELAYED"}
+                    </div>
                 )}
 
-                {viewMode === "watchlist" && (
-                    <>
-                        {/* Unbookmark button (removes from watchlist) */}
-                        <button
-                            onClick={(e) => {
-                                e.stopPropagation();
-                                // Also remove from actually watching if unbookmarking
-                                if (actuallyWatching) toggleActuallyWatching(anime.id);
-                                toggleAnime(anime.id);
-                            }}
-                            className="flex items-center justify-center rounded-full bg-black/30 p-2 transition-transform duration-150 hover:scale-110 hover:bg-black/50"
-                            title="Remove from watchlist"
-                        >
-                            <Bookmark className="h-7 w-7 fill-brand-blue text-brand-blue" />
-                        </button>
+                {/* ── Bottom Gradient + Title ── */}
+                <div className="absolute bottom-0 left-0 right-0 z-10 px-2 pb-2 pt-8"
+                    style={{
+                        background: "linear-gradient(to top, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0.5) 50%, transparent 100%)",
+                    }}>
+                    <p className="line-clamp-2 text-[11px] font-medium leading-tight text-white drop-shadow-md">
+                        {anime.title}
+                    </p>
+                </div>
 
-                        {/* Actually Watching toggle */}
-                        <button
-                            onClick={(e) => {
-                                e.stopPropagation();
-                                toggleActuallyWatching(anime.id);
-                            }}
-                            className="flex items-center justify-center rounded-full bg-black/30 p-2 transition-transform duration-150 hover:scale-110 hover:bg-black/50"
-                            title={actuallyWatching ? "Remove from Actually Watching" : "Add to Actually Watching"}
-                        >
-                            <Eye
-                                className={`h-7 w-7 ${actuallyWatching
-                                    ? "text-emerald-400"
-                                    : "text-white"
-                                    }`}
-                            />
-                        </button>
-                    </>
+                {/* ── Hover Overlay ── */}
+                <div
+                    className="absolute inset-0 z-20 flex items-center justify-center gap-4 bg-black/40 opacity-0 transition-opacity duration-200 group-hover:opacity-100"
+                >
+                    {viewMode === "all" && (
+                        <>
+                            {/* Bookmark button */}
+                            <button
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    toggleAnime(anime.id);
+                                }}
+                                className="flex items-center justify-center rounded-full bg-black/30 p-2 transition-transform duration-150 hover:scale-110 hover:bg-black/50"
+                                title={watched ? "Remove from watchlist" : "Add to watchlist"}
+                            >
+                                <Bookmark
+                                    className={`h-7 w-7 ${watched
+                                        ? "fill-brand-blue text-brand-blue"
+                                        : "fill-none text-white"
+                                        }`}
+                                />
+                            </button>
+
+                            {/* Hide button */}
+                            <button
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    toggleHidden(anime.id);
+                                }}
+                                className="flex items-center justify-center rounded-full bg-black/30 p-2 transition-transform duration-150 hover:scale-110 hover:bg-red-900/50"
+                                title="Hide from dashboard"
+                            >
+                                <X className="h-7 w-7 text-red-400" />
+                            </button>
+                        </>
+                    )}
+
+                    {viewMode === "watchlist" && (
+                        <>
+                            {/* Unbookmark button (removes from watchlist) */}
+                            <button
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    if (actuallyWatching) toggleActuallyWatching(anime.id);
+                                    toggleAnime(anime.id);
+                                }}
+                                className="flex items-center justify-center rounded-full bg-black/30 p-2 transition-transform duration-150 hover:scale-110 hover:bg-black/50"
+                                title="Remove from watchlist"
+                            >
+                                <Bookmark className="h-7 w-7 fill-brand-blue text-brand-blue" />
+                            </button>
+
+                            {/* Actually Watching toggle */}
+                            <button
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    toggleActuallyWatching(anime.id);
+                                }}
+                                className="flex items-center justify-center rounded-full bg-black/30 p-2 transition-transform duration-150 hover:scale-110 hover:bg-black/50"
+                                title={actuallyWatching ? "Remove from Actually Watching" : "Add to Actually Watching"}
+                            >
+                                <Eye
+                                    className={`h-7 w-7 ${actuallyWatching
+                                        ? "text-emerald-400"
+                                        : "text-white"
+                                        }`}
+                                />
+                            </button>
+                        </>
+                    )}
+
+                    {viewMode === "watching" && (
+                        <>
+                            {/* Remove from actually watching */}
+                            <button
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    toggleActuallyWatching(anime.id);
+                                }}
+                                className="flex items-center justify-center rounded-full bg-black/30 p-2 transition-transform duration-150 hover:scale-110 hover:bg-black/50"
+                                title="Remove from Actually Watching"
+                            >
+                                <Eye className="h-7 w-7 text-emerald-400" />
+                            </button>
+                        </>
+                    )}
+                </div>
+
+                {/* ── Persistent bookmark indicator (when in watchlist) ── */}
+                {watched && viewMode === "all" && (
+                    <div className="absolute top-[26px] right-1 z-20 pointer-events-none">
+                        <Bookmark className="h-4 w-4 fill-brand-blue text-brand-blue drop-shadow" />
+                    </div>
                 )}
 
-                {viewMode === "watching" && (
-                    <>
-                        {/* Remove from actually watching */}
-                        <button
-                            onClick={(e) => {
-                                e.stopPropagation();
-                                toggleActuallyWatching(anime.id);
-                            }}
-                            className="flex items-center justify-center rounded-full bg-black/30 p-2 transition-transform duration-150 hover:scale-110 hover:bg-black/50"
-                            title="Remove from Actually Watching"
-                        >
-                            <Eye className="h-7 w-7 text-emerald-400" />
-                        </button>
-                    </>
+                {/* ── Persistent "actually watching" indicator (in watchlist view) ── */}
+                {actuallyWatching && viewMode === "watchlist" && (
+                    <div className="absolute top-[26px] right-1 z-20 pointer-events-none">
+                        <Eye className="h-4 w-4 text-emerald-400 drop-shadow" />
+                    </div>
                 )}
             </div>
 
-            {/* ── Persistent bookmark indicator (when in watchlist) ── */}
-            {watched && viewMode === "all" && (
-                <div className="absolute top-[26px] right-1 z-20 pointer-events-none">
-                    <Bookmark className="h-4 w-4 fill-brand-blue text-brand-blue drop-shadow" />
-                </div>
+            {/* ── Context Menu (rendered outside the card via portal-like fixed positioning) ── */}
+            {contextMenu && (
+                <AnimeContextMenu
+                    x={contextMenu.x}
+                    y={contextMenu.y}
+                    anime={{
+                        id: anime.id,
+                        title: anime.title,
+                        romaji: anime.romaji,
+                        english: anime.english,
+                        episodeNumber: anime.episodeNumber,
+                        releaseType: anime.releaseType,
+                    }}
+                    onClose={() => setContextMenu(null)}
+                />
             )}
-
-            {/* ── Persistent "actually watching" indicator (in watchlist view) ── */}
-            {actuallyWatching && viewMode === "watchlist" && (
-                <div className="absolute top-[26px] right-1 z-20 pointer-events-none">
-                    <Eye className="h-4 w-4 text-emerald-400 drop-shadow" />
-                </div>
-            )}
-        </div>
+        </>
     );
 }

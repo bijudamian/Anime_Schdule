@@ -1,8 +1,14 @@
 // ─────────────────────────────────────────────────────────
 // API: /api/user-preferences
 //
-// GET  — Fetch current user's watchlist + hiddenAnime + savedFilters from MongoDB
-// PUT  — Upsert current user's watchlist + hiddenAnime + savedFilters to MongoDB
+// GET  — Fetch current user's preferences from MongoDB
+// PUT  — Upsert current user's preferences to MongoDB
+//
+// Synced fields:
+//   • watchlist           — bookmarked anime route IDs
+//   • actuallyWatching    — subset the user is actively following
+//   • hiddenAnime         — anime hidden from the dashboard
+//   • savedFilterPresets  — two saved filter preset slots
 //
 // Protected: Requires Clerk auth (returns 401 if not signed in)
 // ─────────────────────────────────────────────────────────
@@ -25,13 +31,23 @@ export async function GET() {
 
         if (!doc) {
             // Return empty defaults for new users
-            return NextResponse.json({ watchlist: [], hiddenAnime: [], savedFilters: null });
+            return NextResponse.json({
+                watchlist: [],
+                actuallyWatching: [],
+                hiddenAnime: [],
+                savedFilterPresets: [null, null],
+            });
         }
 
         return NextResponse.json({
             watchlist: doc.watchlist || [],
+            actuallyWatching: doc.actuallyWatching || [],
             hiddenAnime: doc.hiddenAnime || [],
-            savedFilters: doc.savedFilters ?? null,
+            // Support both old `savedFilters` and new `savedFilterPresets`
+            savedFilterPresets: doc.savedFilterPresets ?? [
+                doc.savedFilters ?? null,
+                null,
+            ],
         });
     } catch (error) {
         console.error("[GET /api/user-preferences] Error:", error);
@@ -47,7 +63,7 @@ export async function PUT(request: Request) {
         }
 
         const body = await request.json();
-        const { watchlist, hiddenAnime, savedFilters } = body;
+        const { watchlist, actuallyWatching, hiddenAnime, savedFilterPresets } = body;
 
         // Validate input
         if (!Array.isArray(watchlist) || !Array.isArray(hiddenAnime)) {
@@ -64,8 +80,9 @@ export async function PUT(request: Request) {
                 $set: {
                     clerkUserId: userId,
                     watchlist,
+                    actuallyWatching: Array.isArray(actuallyWatching) ? actuallyWatching : [],
                     hiddenAnime,
-                    savedFilters: savedFilters ?? null,
+                    savedFilterPresets: savedFilterPresets ?? [null, null],
                     updatedAt: new Date(),
                 },
                 $setOnInsert: {
